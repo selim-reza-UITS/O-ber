@@ -3,7 +3,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
 ]
 
 MIDDLEWARE = [
@@ -34,7 +35,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = '_config.urls'
+ROOT_URLCONF = 'src._config.urls'
 
 TEMPLATES = [
     {
@@ -51,7 +52,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = '_config.wsgi.application'
+WSGI_APPLICATION = 'src._config.wsgi.application'
 
 
 # Database
@@ -64,7 +65,18 @@ LOCAL_DATABASES = {
     }
 }
 
-DATABASES = LOCAL_DATABASES
+LOCAL_POSTGRES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('POSTGRES_DB'),
+        'USER': os.getenv('POSTGRES_USER'),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD'),
+        'HOST': 'db',  # The name of the service in docker-compose.yml
+        'PORT': '5432',
+    }
+}
+
+DATABASES = LOCAL_POSTGRES
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
@@ -89,7 +101,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Dhaka'
 
 USE_I18N = True
 

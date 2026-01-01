@@ -1,1 +1,4 @@
 .env
+venv
+docker-compose-local.yml
+scripts/entrypoint_local.sh
