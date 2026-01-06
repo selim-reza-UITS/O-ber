@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from datetime import timedelta  # noqa: F401
 from dotenv import load_dotenv
 load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -23,6 +24,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'src.apps.accounts',
 ]
 
 MIDDLEWARE = [
@@ -112,3 +114,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+
+AUTH_USER_MODEL = 'accounts.User'
+
+AUTHENTICATION_BACKENDS = [
+    'src.apps.accounts.backends.EmailOrPhoneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
