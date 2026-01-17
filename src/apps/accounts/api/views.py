@@ -6,10 +6,11 @@ from rest_framework import status, permissions
 from rest_framework.permissions import AllowAny
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
-from ..serializers import SignUpSerializer, PasswordResetSerializer,VerifyOTPSerializer
+from ..serializers import SignUpSerializer, PasswordResetSerializer,VerifyOTPSerializer,LoginSerializer
 from django.contrib.auth import get_user_model
 from ..services import OTPService
 from django.db import transaction
+from django.db.models import Q
 from src.apps.accounts.models import RiderProfile
 
 User = get_user_model()
@@ -54,22 +55,67 @@ class SignUpView(APIView):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class LoginView(APIView):
-    permission_classes = [permissions.AllowAny]
+class LoginView(views.APIView):
+    permission_classes = [AllowAny]
 
     def post(self, request):
-        username = request.data.get('username') # Flutter sends Email OR Phone
-        password = request.data.get('password')
-
-        user = authenticate(username=username, password=password)
+        serializer = LoginSerializer(data=request.data)
         
-        if user:
-            return Response({
-                "user": {"id": user.user_id, "full_name": user.full_name},
-                "tokens": get_tokens_for_user(user)
-            })
-        return Response({"error": "Invalid email/phone or password"}, status=status.HTTP_401_UNAUTHORIZED)
+        # 1. If validation fails, return 400 immediately
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        login_id = serializer.validated_data['login_id']
+        password = serializer.validated_data['password']
+
+        # 2. Search for the user (using iexact for email to ignore case)
+        user = User.objects.filter(
+            Q(email__iexact=login_id) | Q(phone_number=login_id)
+        ).first()
+
+        # Debugging: See what was found in the terminal
+        print(f"DEBUG: Attempting login for ID: {login_id}")
+        print(f"DEBUG: User found: {user}")
+
+        # 3. Check if user exists
+        if not user:
+            return Response({"error": "No account found with this email/phone."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # 4. Check password
+        if not user.check_password(password):
+            print(f"DEBUG: Password check failed for {user.email}")
+            return Response({"error": "Invalid password."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # 5. Check if active
+        if not user.is_active:
+            return Response({"error": "Account is disabled."}, status=status.HTTP_403_FORBIDDEN)
+
+        # 6. Success - Generate Tokens
+        try:
+            refresh = RefreshToken.for_user(user)
+            
+            # Initials logic for Flutter UI
+            names = user.full_name.split()
+            initials = "".join([n[0].upper() for n in names[:2]]) if names else ""
+
+            return Response({
+                "user_id": user.user_id,
+                "full_name": user.full_name,
+                "email": user.email,
+                "phone_number": user.phone_number,
+                "is_rider": user.is_rider,
+                "is_driver": user.is_driver,
+                "user_initials": initials,
+                "tokens": {
+                    "refresh": str(refresh),
+                    "access": str(refresh.access_token),
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": f"Token generation failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            
 class ForgotPasswordRequestView(APIView):
     permission_classes = [permissions.AllowAny]
 

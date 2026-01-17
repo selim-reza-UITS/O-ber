@@ -7,6 +7,7 @@ from .api.views import (
     VerifyOTPView,
     PasswordResetConfirmView
 )
+from .api.views_profile import UserProfileView
 
 urlpatterns = [
     path('signup/', SignUpView.as_view(), name='signup'),
@@ -15,4 +16,5 @@ urlpatterns = [
     path('forgot-password/', ForgotPasswordRequestView.as_view(), name='forgot-password'),
     path('verify-otp/', VerifyOTPView.as_view(), name='verify-otp'),
     path('reset-password/', PasswordResetConfirmView.as_view(), name='reset-password'),
+    path('profile/', UserProfileView.as_view(), name='user-profile'),
 ]

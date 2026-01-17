@@ -1,4 +1,5 @@
 import os
+import stripe
 from pathlib import Path
 from datetime import timedelta  # noqa: F401
 from dotenv import load_dotenv
@@ -17,14 +18,21 @@ ALLOWED_HOSTS = LOCAL_ALLOWED_HOSTS
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne', 
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.gis',
     'rest_framework',
+    'channels',
     'src.apps.accounts',
+    'src.apps.dashboard',
+    # 'src.apps.drivers',
+    'src.apps.payments',
+    'src.apps.riders',
 ]
 
 MIDDLEWARE = [
@@ -53,7 +61,7 @@ TEMPLATES = [
         },
     },
 ]
-
+ASGI_APPLICATION = 'src._config.asgi.application'
 WSGI_APPLICATION = 'src._config.wsgi.application'
 
 
@@ -69,12 +77,12 @@ LOCAL_DATABASES = {
 
 LOCAL_POSTGRES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
         'NAME': os.getenv('POSTGRES_DB'),
         'USER': os.getenv('POSTGRES_USER'),
         'PASSWORD': os.getenv('POSTGRES_PASSWORD'),
-        'HOST': 'db',  # The name of the service in docker-compose.yml
-        'PORT': '5432',
+        'HOST': os.getenv("POSTGRES_HOST"),  # The name of the service in docker-compose.yml
+        'PORT': os.getenv("POSTGRES_PORT"),
     }
 }
 
@@ -122,3 +130,24 @@ AUTHENTICATION_BACKENDS = [
     'src.apps.accounts.backends.EmailOrPhoneBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
+
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('redis', 6378)],
+        },
+    },
+}
+
+CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://redis:6378/0')
+CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://redis:6378/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+
+GDAL_LIBRARY_PATH = "/usr/lib/x86_64-linux-gnu/libgdal.so"
+GEOS_LIBRARY_PATH = "/usr/lib/x86_64-linux-gnu/libgeos_c.so"
+
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
+stripe.api_key = STRIPE_SECRET_KEY

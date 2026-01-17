@@ -22,13 +22,25 @@ services:
   web:
     build: .
     container_name: ober_backend
-    # Use gunicorn for logic. We don't expose 9700 to the host, 
-    # only Nginx will talk to it internally.
-    command: gunicorn src._config.wsgi:application --bind 0.0.0.0:9700
+    command: daphne -b 0.0.0.0 -p 9700 src._config.asgi:application
     volumes:
       - .:/app 
       - media_data:/app/media
       - static_data:/app/static
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    environment:
+      GDAL_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu/libgdal.so
+      GEOS_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu/libgeos_c.so
+
+
+  worker:
+    build: .
+    container_name: ober_worker
+    command: celery -A src._config worker --loglevel=info
     env_file:
       - .env
     depends_on:

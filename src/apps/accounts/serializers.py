@@ -1,9 +1,10 @@
+import phonenumbers
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from django.db import transaction
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import RiderProfile, DriverProfile
+from .models import RiderProfile
+
 
 User = get_user_model()
 
@@ -19,30 +20,67 @@ class SignUpSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['full_name', 'email', 'phone_number', 'password', 'confirm_password']
+        extra_kwargs = {
+            'password': {'write_only': True}
+        }
+    def validate_phone_number(self, value):
+        """
+        Validates Aruba (+297) phone numbers
+        """
+        try:
+            parsed_number = phonenumbers.parse(value, "AW")
+            
+            if not phonenumbers.is_valid_number(parsed_number):
+                raise serializers.ValidationError("Invalid Aruba phone number.")
+            
+            if phonenumbers.region_code_for_number(parsed_number) != "AW":
+                raise serializers.ValidationError("Only Aruba (+297) phone numbers are allowed.")
 
+            # Return the standardized international format (+297xxxxxxx)
+            return phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
+            
+        except phonenumbers.phonenumberutil.NumberParseException:
+            raise serializers.ValidationError("Invalid phone format. Please enter a valid number.")
+        
     def validate(self, attrs):
         if attrs['password'] != attrs['confirm_password']:
             raise serializers.ValidationError({"password": "Passwords do not match."})
         validate_password(attrs['password'])
         return attrs
 
-    def to_representation(self, instance):
-        """Custom response: Includes user details + JWT Tokens after signup"""
-        data = super().to_representation(instance)
-        refresh = RefreshToken.for_user(instance)
-        data['tokens'] = {
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-        }
-        # Add initials if no photo (UI logic for Flutter)
-        names = instance.full_name.split()
-        initials = "".join([n[0].upper() for n in names[:2]])
-        data['user_initials'] = initials
-        return data
+    def create(self, validated_data):
+        # Remove confirm_password before creating user
+        validated_data.pop('confirm_password')
+        
+        # Create user using the manager
+        user = User.objects.create_user(
+            email=validated_data['email'],
+            password=validated_data['password'],
+            full_name=validated_data['full_name'],
+            phone_number=validated_data['phone_number'],
+            is_rider=True # Default to rider
+        )
+        
+        # Automatically create the Rider Profile
+        RiderProfile.objects.create(user=user)
+        return user
 
+    def to_representation(self, instance):
+        """Include JWT Tokens in response so the user is logged in immediately"""
+        refresh = RefreshToken.for_user(instance)
+        return {
+            'user_id': instance.user_id,
+            'full_name': instance.full_name,
+            'email': instance.email,
+            'phone_number': instance.phone_number,
+            'tokens': {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }
+        }
 class LoginSerializer(serializers.Serializer):
     """Handles Email or Phone login"""
-    username = serializers.CharField() # Flutter can send email OR phone here
+    login_id = serializers.CharField() 
     password = serializers.CharField(write_only=True)
 
 class ForgotPasswordSerializer(serializers.Serializer):

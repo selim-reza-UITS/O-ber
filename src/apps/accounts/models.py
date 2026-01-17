@@ -1,6 +1,6 @@
 from shortuuid.django_fields import ShortUUIDField
 from django.contrib.auth.models import AbstractUser
-from django.db import models
+from django.contrib.gis.db import models
 from .managers import CustomUserManager
 
 class User(AbstractUser):
@@ -49,13 +49,42 @@ class DriverProfile(models.Model):
     vehicle_type = models.CharField(max_length=50)
     vehicle_brand = models.CharField(max_length=50)
     vehicle_model = models.CharField(max_length=50)
+    vehicle_plate = models.CharField(max_length=20, unique=True, null=True)
     registration_photo = models.ImageField(upload_to='drivers/documents/vehicle/')
     
     # Status
     ai_verified = models.BooleanField(default=False)
     admin_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
+    is_online = models.BooleanField(default=False)
+    # PostGIS field for real-time location
+    last_location = models.PointField(null=True, blank=True, srid=4326)
 
 class VehicleImage(models.Model):
     driver = models.ForeignKey(DriverProfile, on_delete=models.CASCADE, related_name='vehicle_photos')
     image = models.ImageField(upload_to='drivers/vehicles/multiple/')
+    
+    
+    
+    
+    
+#
+
+class PendingDriverUpdate(models.Model):
+    driver = models.OneToOneField(DriverProfile, on_delete=models.CASCADE, related_name='pending_update')
+    full_name = models.CharField(max_length=255, null=True, blank=True)
+    user_photo = models.ImageField(upload_to='drivers/pending/photos/', null=True, blank=True)
+    gender = models.CharField(max_length=1, choices=DriverProfile.GENDER_CHOICES, null=True, blank=True)
+    nid_front = models.ImageField(upload_to='drivers/pending/nid/', null=True, blank=True)
+    nid_back = models.ImageField(upload_to='drivers/pending/nid/', null=True, blank=True)
+    license_front = models.ImageField(upload_to='drivers/pending/license/', null=True, blank=True)
+    license_back = models.ImageField(upload_to='drivers/pending/license/', null=True, blank=True)
+    vehicle_type = models.CharField(max_length=50, null=True, blank=True)
+    vehicle_brand = models.CharField(max_length=50, null=True, blank=True)
+    vehicle_model = models.CharField(max_length=50, null=True, blank=True)
+    registration_photo = models.ImageField(upload_to='drivers/pending/vehicle/', null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Pending Update for {self.driver.user.full_name}"

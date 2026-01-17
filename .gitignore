@@ -2,3 +2,9 @@
 venv
 docker-compose-local.yml
 scripts/entrypoint_local.sh
+static
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class

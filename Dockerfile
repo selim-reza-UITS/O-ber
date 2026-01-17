@@ -108,12 +108,15 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Install dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     binutils \
-    libproj-dev \
     gdal-bin \
+    libgdal-dev \
+    libgeos-dev \
+    libproj-dev \
     libpq-dev \
     gcc \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements and install them
