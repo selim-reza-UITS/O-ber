@@ -1,0 +1,62 @@
+from django.urls import path,include
+
+#third part imports:
+from rest_framework_simplejwt.views import TokenRefreshView
+
+# urls imports:
+#
+from src.apps.accounts.api import views as accounts
+from src.apps.accounts.api import views_profile as accounts_profile
+from src.apps.accounts.api import views_driver as driver_accounts
+#
+from src.apps.riders import views as riders
+from src.apps.drivers import views as drivers
+#
+from src.apps.dashboard import views as dashboard
+
+auth_patterns = [
+    path("signup/",accounts.SignUpView.as_view(),name="signup"),
+    path("login/",accounts.LoginView.as_view(),name="login"),
+    path("token/refresh/",TokenRefreshView.as_view(),name="new_token_generate"),
+]
+
+password_management = [
+    path("forget-password/",accounts.ForgotPasswordRequestView.as_view(),name="send_email"),
+    path("verify-otp/",accounts.VerifyOTPView.as_view(),name="verify_otp"),
+    path("reset_password/",accounts.PasswordResetConfirmView.as_view(),name="password_reset"),
+]
+
+rider_pattern = [
+    path("accounts/profile/",accounts_profile.UserProfileView.as_view(),name="Profile"),
+    path("ride/create/",riders.RideHistoryView.as_view(),name="request_for_a_ride"),
+    path("ride/history/",riders.RideHistoryView.as_view(),name="all_ride_history"),
+
+]
+
+# rider_websocket_pattern = []
+
+driver_pattern = [
+    path("driver-onboarding/",driver_accounts.DriverOnboardingView.as_view(),name="onboarding"),
+    path("verify-KYC/",driver_accounts.DriverSelfieVerifyView.as_view(),name="match-selfie"),
+    path("location-update/",drivers.UpdateDriverLocationView.as_view(),name="location_update"),
+    path("available-for-rides/",drivers.AvailableRidesView.as_view(),name="check all available rider list"),
+    path("accept-ride/<id>/",drivers.AcceptRideView.as_view(),name="accept_riders"),
+    # path("ride-status/<id>/",drivers.)
+
+]
+
+dashboard_patterns = [
+    path("terms-and-conditions/",dashboard.TermsView.as_view(),name="terms-and-conditions"),
+    path("privacy-and-policy/",dashboard.PrivacyView.as_view(),name="privacy-and-policy"),
+    path("about-us/",dashboard.AboutUsView.as_view(),name="aboutUs"),
+    path("help-and-support/",dashboard.HelpSupportView.as_view(),name="helpAndSupport"),
+    path("admin/approve-driver/<id>/",dashboard.AdminDriverApprovalView.as_view(),name="approveDriver"),
+]
+
+urlpatterns = [
+    path("auth/",include(auth_patterns)),
+    path("password/management/",include(password_management)),
+    path("rider/",include(rider_pattern)),
+    path("driver/",include(driver_pattern)),
+    path("platform/",include(dashboard_patterns)),
+]

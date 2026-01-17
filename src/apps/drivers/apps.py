@@ -2,4 +2,4 @@ from django.apps import AppConfig
 
 
 class DriversConfig(AppConfig):
-    name = 'drivers'
+    name = 'src.apps.drivers'
