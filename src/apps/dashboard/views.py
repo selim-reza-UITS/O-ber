@@ -7,6 +7,7 @@ from .models import TermsAndConditionsModel, PrivacyAndPolicyModel, AboutUs, Hel
 from .serializers import TermsSerializer, PrivacySerializer, AboutUsSerializer, HelpSupportSerializer
 from src.apps.accounts.models import DriverProfile, User,PendingDriverUpdate
 from src.apps.accounts.serializers_driver import DriverProfileSerializer
+from src.apps.accounts.services import SupportService
 
 class StaticContentBaseView(APIView):
     """Base View to handle Singleton-like behavior for static content"""
@@ -53,11 +54,23 @@ class HelpSupportView(APIView):
     def post(self, request):
         serializer = HelpSupportSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(user=request.user)
+            # Save to database
+            support_instance = serializer.save(user=request.user)
+            
+            # Send Email to Admin
+            try:
+                SupportService.send_support_email(
+                    user_email=request.user.email,
+                    message=support_instance.message
+                )
+            except Exception as e:
+                print(f"Error sending support email: {e}")
+
             return Response({
                 "message": "Support request sent successfully. Admin will review it.",
                 "data": serializer.data
             }, status=status.HTTP_201_CREATED)
+            
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AdminEarningsView(APIView):

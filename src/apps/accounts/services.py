@@ -24,3 +24,18 @@ class OTPService:
             [email],
             fail_silently=False,
         )
+
+class SupportService:
+    @staticmethod
+    def send_support_email(user_email, message):
+        """Sends an email notification to the Admin about a new support ticket"""
+        subject = f"New Support Request from {user_email}"
+        full_message = f"User Email: {user_email}\n\nMessage:\n{message}"
+        
+        send_mail(
+            subject,
+            full_message,
+            user_email,
+            [settings.ADMIN_SUPPORT_EMAIL],
+            fail_silently=False,
+        )

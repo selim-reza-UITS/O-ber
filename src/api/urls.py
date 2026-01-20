@@ -41,7 +41,8 @@ driver_pattern = [
     path("location-update/",drivers.UpdateDriverLocationView.as_view(),name="location_update"),
     path("available-for-rides/",drivers.AvailableRidesView.as_view(),name="check all available rider list"),
     path("accept-ride/<id>/",drivers.AcceptRideView.as_view(),name="accept_riders"),
-    # path("ride-status/<id>/",drivers.)
+    path('toggle-online/', drivers.DriverToggleOnlineView.as_view(), name='driver-toggle-online'),
+    path('dashboard/',drivers.DriverProfileDashboardView.as_view(),name="driver_profile"),
 
 ]
 
@@ -57,6 +58,6 @@ urlpatterns = [
     path("auth/",include(auth_patterns)),
     path("password/management/",include(password_management)),
     path("rider/",include(rider_pattern)),
-    path("driver/",include(driver_pattern)),
+    path("drivers/",include(driver_pattern)),
     path("platform/",include(dashboard_patterns)),
 ]

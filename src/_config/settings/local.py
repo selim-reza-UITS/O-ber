@@ -28,3 +28,4 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
     'BLACKLIST_AFTER_ROTATION': True,
 }
+

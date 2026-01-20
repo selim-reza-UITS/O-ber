@@ -10,7 +10,13 @@ from src.apps.riders.tasks import task_broadcast_location
 from django.db import transaction
 
 from src.apps.accounts.permissions import IsDriver, IsVerifiedDriver
-
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from src.apps.accounts.models import DriverProfile
+from .serializers import DriverDashboardSerializer
+from .models import DriverShift
+from django.utils import timezone
 
 class UpdateDriverLocationView(APIView):
     # Security: Ensure only authenticated DRIVERS can call this
@@ -104,3 +110,70 @@ class AcceptRideView(APIView):
                 "ride_id": ride.id
             })
         
+
+
+
+
+
+class DriverProfileDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = request.user.driver_profile
+        except DriverProfile.DoesNotExist:
+            return Response({"error": "Driver profile not found"}, status=404)
+
+        serializer = DriverDashboardSerializer(profile)
+        
+        response_data = {
+            "full_name": request.user.full_name,
+            "email": request.user.email,
+            "phone": request.user.phone_number,
+            "stats": serializer.data
+        }
+        
+        return Response(response_data)
+    
+
+
+class DriverToggleOnlineView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        
+        # 1. Ensure the user has a driver profile
+        try:
+            profile = user.driver_profile
+        except DriverProfile.DoesNotExist:
+            return Response({"error": "Driver profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # 2. Safety Check: Only verified drivers can go online
+        if not profile.admin_verified:
+            return Response({
+                "error": "Your account is pending admin approval. You cannot go online yet."
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # 3. Toggle Logic
+        profile.is_online = not profile.is_online
+        
+        if profile.is_online:
+            # Logic: Start a new shift
+            # We use update_or_create/last check to prevent double shifts if the app crashed
+            DriverShift.objects.create(driver=profile, start_time=timezone.now())
+            message = "You are now Online and searching for rides."
+        else:
+            # Logic: End the current open shift
+            current_shift = DriverShift.objects.filter(driver=profile, end_time__isnull=True).last()
+            if current_shift:
+                current_shift.end_time = timezone.now()
+                current_shift.save()
+            message = "You are now Offline."
+
+        profile.save()
+
+        return Response({
+            "is_online": profile.is_online,
+            "message": message
+        }, status=status.HTTP_200_OK)

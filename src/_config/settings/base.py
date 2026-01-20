@@ -30,7 +30,7 @@ INSTALLED_APPS = [
     'channels',
     'src.apps.accounts',
     'src.apps.dashboard',
-    # 'src.apps.drivers',
+    'src.apps.drivers',
     'src.apps.payments',
     'src.apps.riders',
 ]
@@ -151,3 +151,14 @@ GEOS_LIBRARY_PATH = "/usr/lib/x86_64-linux-gnu/libgeos_c.so"
 
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
 stripe.api_key = STRIPE_SECRET_KEY
+
+
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.hostinger.com"
+EMAIL_USE_SSL = True
+EMAIL_PORT = 465
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+ADMIN_SUPPORT_EMAIL = EMAIL_HOST_USER
