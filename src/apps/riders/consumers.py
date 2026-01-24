@@ -105,3 +105,32 @@ class RideChatConsumer(AsyncWebsocketConsumer):
             sender=self.user,
             content=content
         )
+    
+class DriverDiscoveryConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        await self.channel_layer.group_add("drivers_discovery", self.channel_name)
+        await self.accept()
+        # Debugging: Send a message to yourself immediately to confirm connection
+        await self.send(text_data=json.dumps({"status": "Connected to Discovery Group"}))
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard("drivers_discovery", self.channel_name)
+
+    # --- ADD THIS METHOD ---
+    async def receive(self, text_data):
+        # 1. Take the message coming IN from the WebSocket (Postman/Browser)
+        # 2. Send it OUT to the entire group
+        await self.channel_layer.group_send(
+            "drivers_discovery",
+            {
+                "type": "broadcast_message", # This calls the method below
+                "message": text_data
+            }
+        )
+
+    async def broadcast_message(self, event):
+        # This sends the data to the actual WebSocket client
+        await self.send(text_data=event["message"])
+
+    async def new_ride_available(self, event):
+        await self.send(text_data=json.dumps(event["data"]))

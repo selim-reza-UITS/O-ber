@@ -11,6 +11,8 @@ from .serializers import RideSerializer
 from src.apps.accounts.models import DriverProfile
 from src.apps.accounts.permissions import IsRider
 from .utils import calculate_dynamic_fare
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 class CreateRideView(APIView):
     permission_classes = [IsRider]
@@ -58,7 +60,7 @@ class CreateRideView(APIView):
                 status='SEARCHING'
             )
             
-            # 4. Find Nearby Drivers
+            # 4. Find Nearby Drivers (Logic for Response)
             nearby_drivers = DriverProfile.objects.filter(
                 is_active=True,
                 is_online=True,
@@ -67,16 +69,33 @@ class CreateRideView(APIView):
                 distance=Distance('last_location', ride.pickup_location)
             ).order_by('distance')
 
-            # 5. Response
-            response_data = RideSerializer(ride).data
+            # --- START OF UPDATE: BROADCAST TO DRIVERS ---
+            channel_layer = get_channel_layer()
+            ride_data = RideSerializer(ride).data
+            
+            # We send to the "available_drivers" group (the one from your DriverDiscoveryConsumer)
+            channel_layer = get_channel_layer()
+            ride_data = RideSerializer(ride).data
+            
+            async_to_sync(channel_layer.group_send)(
+                "drivers_discovery",  # <--- MATCHED to your Consumer
+                {
+                    "type": "new_ride_available", # <--- MATCHED to your method name
+                    "data": {
+                        "event": "NEW_RIDE_AVAILABLE",
+                        "ride": ride_data,
+                    }
+                }
+            )
+            # --- END OF UPDATE ---
+
+            # 5. Response to Rider
+            response_data = ride_data
             response_data['nearby_drivers_count'] = nearby_drivers.count()
             
             return Response(response_data, status=status.HTTP_201_CREATED)
             
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        
-
 
 
 class RideHistoryView(APIView):

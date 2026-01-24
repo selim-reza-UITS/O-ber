@@ -104,7 +104,13 @@ class AcceptRideView(APIView):
             ride.driver = request.user
             ride.status = 'ACCEPTED'
             ride.save()
-
+            broadcast_ride_update(ride.id, {
+                "type": "DRIVER_ACCEPTED",
+                "status": "ACCEPTED",
+                "driver_name": request.user.full_name,
+                "driver_phone": request.user.phone_number,
+                "vehicle": f"{request.user.driver_profile.vehicle_brand} {request.user.driver_profile.vehicle_model}"
+            })
             return Response({
                 "message": "Ride accepted successfully",
                 "ride_id": ride.id
