@@ -2,8 +2,7 @@ import stripe
 
 def process_ride_payment(ride):
     """
-    In a real app, you'd use the Rider's saved 'Customer ID' and 'Payment Method'.
-    For a 5-day MVP/Demo, we will create a 'Payment Intent'.
+    Handles payment processing via Stripe.
     """
     try:
         # Stripe expects amounts in CENTS (so $15.00 becomes 1500)

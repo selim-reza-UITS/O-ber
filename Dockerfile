@@ -130,7 +130,7 @@ COPY . .
 COPY ./scripts /app/scripts
 
 # Make entrypoint script executable
-RUN chmod +x /app/scripts/entrypoint_local.sh
+RUN chmod +x /app/scripts/entrypoint.sh
 
 # Set the entrypoint
-CMD ["/app/scripts/entrypoint_local.sh"]
+CMD ["/app/scripts/entrypoint.sh"]
