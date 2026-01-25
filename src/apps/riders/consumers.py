@@ -6,7 +6,7 @@ from rest_framework_simplejwt.tokens import UntypedToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from .models import RideMessage
 from src.apps.riders.models import Ride
-
+from urllib.parse import parse_qs
 User = get_user_model()
 
 class TripTrackingConsumer(AsyncWebsocketConsumer):
@@ -108,29 +108,56 @@ class RideChatConsumer(AsyncWebsocketConsumer):
     
 class DriverDiscoveryConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        await self.channel_layer.group_add("drivers_discovery", self.channel_name)
+        # 1. Get vehicle type from the URL: ws://.../?vehicle_type=XL
+        query_string = self.scope.get("query_string", b"").decode("utf-8")
+        query_params = parse_qs(query_string)
+        
+        # Default to ECONOMY if not provided
+        self.vehicle_type = query_params.get("vehicle_type", ["ECONOMY"])[0].upper()
+        
+        # 2. Define group names
+        self.general_group = "drivers_discovery"
+        self.type_group = f"drivers_{self.vehicle_type}"
+
+        # 3. Join BOTH groups (General for broadcasts, Type-specific for ride requests)
+        await self.channel_layer.group_add(self.general_group, self.channel_name)
+        await self.channel_layer.group_add(self.type_group, self.channel_name)
+
         await self.accept()
-        # Debugging: Send a message to yourself immediately to confirm connection
-        await self.send(text_data=json.dumps({"status": "Connected to Discovery Group"}))
+        
+        # Confirm connection to the driver
+        await self.send(text_data=json.dumps({
+            "status": "Connected",
+            "subscribed_to": self.type_group
+        }))
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard("drivers_discovery", self.channel_name)
+        # Leave groups on disconnect
+        await self.channel_layer.group_discard(self.general_group, self.channel_name)
+        await self.channel_layer.group_discard(self.type_group, self.channel_name)
 
-    # --- ADD THIS METHOD ---
     async def receive(self, text_data):
-        # 1. Take the message coming IN from the WebSocket (Postman/Browser)
-        # 2. Send it OUT to the entire group
+        """ Handles messages sent FROM the driver (like location updates) """
+        data = json.loads(text_data)
+        
+        # Example: If driver sends a message, broadcast it to the whole discovery group
         await self.channel_layer.group_send(
-            "drivers_discovery",
+            self.general_group,
             {
-                "type": "broadcast_message", # This calls the method below
+                "type": "broadcast_message",
                 "message": text_data
             }
         )
 
     async def broadcast_message(self, event):
-        # This sends the data to the actual WebSocket client
         await self.send(text_data=event["message"])
 
     async def new_ride_available(self, event):
-        await self.send(text_data=json.dumps(event["data"]))
+        """ 
+        This is triggered by the CreateRideView. 
+        It sends the ride details only to drivers in the matching vehicle group.
+        """
+        await self.send(text_data=json.dumps({
+            "type": "NEW_RIDE_REQUEST",
+            "data": event["data"]
+        }))
