@@ -17,6 +17,9 @@ class User(AbstractUser):
     
     is_rider = models.BooleanField(default=True)
     is_driver = models.BooleanField(default=False)
+    
+    # Stripe
+    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['full_name', 'phone_number']

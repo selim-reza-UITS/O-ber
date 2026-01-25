@@ -13,11 +13,3 @@ class DriverShift(models.Model):
         if self.end_time:
             return self.end_time - self.start_time
         return timezone.now() - self.start_time
-
-class RideReview(models.Model):
-    """Rider reviews for the driver."""
-    ride = models.OneToOneField('riders.Ride', on_delete=models.CASCADE, related_name='review')
-    driver = models.ForeignKey(DriverProfile, on_delete=models.CASCADE, related_name='reviews')
-    rating = models.PositiveSmallIntegerField(default=5) # 1 to 5
-    comment = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)

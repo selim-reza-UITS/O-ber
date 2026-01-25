@@ -183,3 +183,109 @@ class DriverToggleOnlineView(APIView):
             "is_online": profile.is_online,
             "message": message
         }, status=status.HTTP_200_OK)
+
+
+class DriverEarningsView(APIView):
+    """
+    Returns comprehensive earnings report for the driver:
+    - Total earnings (all time)
+    - Total trips
+    - Online time
+    - Date-wise earnings breakdown
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Sum, Count
+        from django.db.models.functions import TruncDate
+        from src.apps.payments.models import Transaction
+        from datetime import timedelta
+        
+        try:
+            profile = request.user.driver_profile
+        except DriverProfile.DoesNotExist:
+            return Response({"error": "Driver profile not found"}, status=404)
+
+        # 1. Total Earnings (All Time)
+        completed_rides = Ride.objects.filter(driver=request.user, status='COMPLETED')
+        total_earnings = Transaction.objects.filter(
+            ride__in=completed_rides,
+            status='SUCCESS'
+        ).aggregate(Sum('amount'))['amount__sum'] or 0
+
+        # 2. Total Trips
+        total_trips = completed_rides.count()
+
+        # 3. Online Time (Total from all shifts)
+        total_online_seconds = sum(
+            [shift.duration.total_seconds() for shift in profile.shifts.filter(end_time__isnull=False)],
+            0
+        )
+        total_online_hours = round(total_online_seconds / 3600, 1)
+
+        # 4. Average Rating
+        from django.db.models import Avg
+        from src.apps.riders.models import RideReview
+        avg_rating = RideReview.objects.filter(driver=request.user).aggregate(Avg('rating'))['rating__avg']
+        avg_rating = round(avg_rating, 1) if avg_rating else 0.0
+
+        # 5. Date-wise Earnings (Last 30 days)
+        last_30_days = timezone.now() - timedelta(days=30)
+        daily_earnings = Transaction.objects.filter(
+            ride__driver=request.user,
+            ride__status='COMPLETED',
+            status='SUCCESS',
+            created_at__gte=last_30_days
+        ).annotate(
+            date=TruncDate('created_at')
+        ).values('date').annotate(
+            earnings=Sum('amount'),
+            trips=Count('id')
+        ).order_by('-date')
+
+        # 6. This Week's Earnings
+        last_7_days = timezone.now() - timedelta(days=7)
+        this_week_earnings = Transaction.objects.filter(
+            ride__driver=request.user,
+            ride__status='COMPLETED',
+            status='SUCCESS',
+            created_at__gte=last_7_days
+        ).aggregate(Sum('amount'))['amount__sum'] or 0
+
+        return Response({
+            "summary": {
+                "total_earnings": str(total_earnings),
+                "this_week_earnings": str(this_week_earnings),
+                "total_trips": total_trips,
+                "total_online_hours": total_online_hours,
+                "average_rating": avg_rating,
+                "currency": "AWG"
+            },
+            "daily_breakdown": list(daily_earnings)
+        })
+
+
+class DriverTripHistoryView(APIView):
+    """
+    Returns driver's completed trip history with ratings
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rides = Ride.objects.filter(
+            driver=request.user
+        ).select_related('rider').order_by('-created_at')
+        
+        history = []
+        for ride in rides:
+            ride_data = RideSerializer(ride).data
+            # Add rating if exists
+            if hasattr(ride, 'review'):
+                ride_data['rating'] = ride.review.rating
+                ride_data['review_comment'] = ride.review.comment
+            else:
+                ride_data['rating'] = None
+                ride_data['review_comment'] = None
+            history.append(ride_data)
+        
+        return Response(history)

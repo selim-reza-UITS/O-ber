@@ -34,6 +34,11 @@ class Ride(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Cancellation
+    cancelled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='cancelled_rides')
+    cancellation_reason = models.TextField(null=True, blank=True)
+    cancellation_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
 
 class RideRequest(models.Model):
     STATUS = [
@@ -66,3 +71,14 @@ class RideMessage(models.Model):
 
     def __str__(self):
         return f"Msg from {self.sender.full_name} on Ride {self.ride.id}"
+
+class RideReview(models.Model):
+    ride = models.OneToOneField(Ride, on_delete=models.CASCADE, related_name='review')
+    rider = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews_written')
+    driver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews_received')
+    rating = models.PositiveIntegerField(default=5)
+    comment = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.rating} stars for Ride {self.ride.id}"

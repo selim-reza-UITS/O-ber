@@ -135,3 +135,15 @@ class PriceConfig(models.Model):
 
     def __str__(self):
         return f"Pricing for {self.vehicle_type}"
+
+class Notification(models.Model):
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Optional: Link to a specific user if it's personal, or null for system-wide
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
+
+    def __str__(self):
+        return self.title
