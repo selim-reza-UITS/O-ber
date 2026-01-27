@@ -6,13 +6,14 @@ from django.db import transaction
 from ..models import DriverProfile, VehicleImage
 from ..serializers_driver import DriverProfileSerializer
 import requests
+import os
 
 def verify_image_ai(selfie_file, document_file):
     """
     Sends images to the FastAPI service for identity verification.
     """
     print("django called me!!!")
-    url = "http://127.0.0.1:8000/verify-identity/"
+    url = os.getenv("KYC_SERVICE_URL", "http://kyc_service:8000/verify-identity/")
     
     try:
         selfie_file.seek(0)

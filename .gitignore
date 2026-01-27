@@ -3,8 +3,14 @@ venv
 docker-compose-local.yml
 scripts/entrypoint_local.sh
 static
+media/
+src/media/
+*.sqlite3
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class
+.pytest_cache/
+.coverage
+htmlcov/

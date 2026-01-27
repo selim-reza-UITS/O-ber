@@ -36,37 +36,54 @@ def create_payment_intent(amount, currency, customer_id, payment_method_id=None)
         print(f"Error creating payment intent: {e}")
         return None
 
-def process_ride_payment(ride, payment_method_id=None):
+import logging
+logger = logging.getLogger(__name__)
+
+def process_ride_payment(ride):
     """
-    Handles payment processing via Stripe.
+    Handles payment processing via Stripe Checkout Session.
+    Returns: session_id, session_url, status
     """
     try:
         amount_in_cents = int(ride.estimated_price * 100)
         customer_id = ride.rider.stripe_customer_id
+        
+        logger.info(f"Processing payment for Ride {ride.id}. Amount: {amount_in_cents}, Customer: {customer_id}")
+        
+        # Base URL for redirects (Deep links or Web pages)
+        # In production, these should be your app's deep links (e.g. ober://payment-success)
+        base_url = getattr(settings, 'FRONTEND_URL', 'http://10.10.13.22:9500')
 
-        if not customer_id:
-             # Fallback: Create customer if missing (should exist via signal)
-             return None, "FAILED_NO_CUSTOMER"
-
-        # Create the charge
-        # If we have a saved payment method, try to charge it immediately
-        intent = stripe.PaymentIntent.create(
-            amount=amount_in_cents,
-            currency="usd", # Or 'awg'
-            description=f"Ride {ride.id} in Aruba",
-            customer=customer_id,
-            payment_method=payment_method_id if payment_method_id else None,
-            confirm=True if payment_method_id else False, # Only confirm if we passed a method
-            automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
-            off_session=True if payment_method_id else False,
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {
+                        'name': f"Ride with {ride.driver.full_name}",
+                        'description': f"Trip from {ride.pickup_address} to {ride.dropoff_address}",
+                    },
+                    'unit_amount': amount_in_cents,
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=f"{base_url}/api/v1/rider/payment/success/?ride_id={ride.id}",
+            cancel_url=f"{base_url}/api/v1/rider/payment/cancel/?ride_id={ride.id}",
+            customer=customer_id if customer_id else None,
+            customer_email=ride.rider.email if not customer_id else None,
+            client_reference_id=str(ride.id),
+            metadata={
+                'ride_id': str(ride.id),
+                'rider_id': str(ride.rider.user_id)
+            }
         )
         
-        status = "SUCCESS" if intent.status == 'succeeded' else "PENDING"
-        return intent.id, status
+        logger.info(f"Stripe Session Created: {session.id}, URL: {session.url}")
         
-    except stripe.error.CardError as e:
-        print(f"Stripe Card Error: {e}")
-        return None, "FAILED_CARD_ERROR"
+        # Status is PENDING until webhook confirms it
+        return session.id, session.url, "PENDING"
+        
     except Exception as e:
-        print(f"Stripe Error: {str(e)}")
-        return None, "FAILED"
+        logger.error(f"Stripe Checkout Error for Ride {ride.id}: {str(e)}", exc_info=True)
+        return None, None, "FAILED"

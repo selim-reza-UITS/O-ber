@@ -22,7 +22,7 @@ class DriverDashboardSerializer(serializers.ModelSerializer):
         ]
 
     def get_rating(self, obj):
-        avg = obj.reviews.aggregate(Avg('rating'))['rating__avg']
+        avg = obj.user.reviews_received.aggregate(Avg('rating'))['rating__avg']
         return round(avg, 1) if avg else 0.0
 
     def get_total_rides(self, obj):

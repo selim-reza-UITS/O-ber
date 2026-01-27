@@ -1,0 +1,902 @@
+{
+    "info": {
+        "_postman_id": "ober-admin-dashboard-apis",
+        "name": "O-Ber Admin Dashboard APIs",
+        "description": "Complete Admin Dashboard APIs for O-Ber ride-sharing platform. All admin endpoints require Bearer token authentication.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000/api/v1",
+            "type": "string"
+        },
+        {
+            "key": "access_token",
+            "value": "",
+            "type": "string"
+        }
+    ],
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{access_token}}",
+                "type": "string"
+            }
+        ]
+    },
+    "item": [
+        {
+            "name": "1. Authentication",
+            "description": "Admin login and token management",
+            "item": [
+                {
+                    "name": "Login",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.tokens && jsonData.tokens.access) {",
+                                    "    pm.collectionVariables.set('access_token', jsonData.tokens.access);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "noauth"
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"login_id\": \"admin@ober.com\",\n    \"password\": \"your_password\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login",
+                                ""
+                            ]
+                        },
+                        "description": "Login with admin credentials. Access token is auto-saved to collection variables."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Refresh Token",
+                    "request": {
+                        "auth": {
+                            "type": "noauth"
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"refresh\": \"your_refresh_token\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/token/refresh/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "token",
+                                "refresh",
+                                ""
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "2. Dashboard",
+            "description": "Dashboard statistics and metrics",
+            "item": [
+                {
+                    "name": "Get Dashboard Stats",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/stats/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "stats",
+                                ""
+                            ],
+                            "query": [
+                                {
+                                    "key": "year",
+                                    "value": "2026",
+                                    "disabled": true,
+                                    "description": "Optional: Filter by year"
+                                }
+                            ]
+                        },
+                        "description": "Get dashboard statistics including: total revenue, total users, total drivers, new driver requests, user growth by month, revenue growth by month."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "3. User Management",
+            "description": "Manage riders/users",
+            "item": [
+                {
+                    "name": "Get All Users",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/users/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "users",
+                                ""
+                            ]
+                        },
+                        "description": "Get list of all users with: full_name, email, phone, status, role, joined date"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get User Details",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/users/:user_id/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "users",
+                                ":user_id",
+                                ""
+                            ],
+                            "variable": [
+                                {
+                                    "key": "user_id",
+                                    "value": "123456",
+                                    "description": "User ID (6-digit)"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Delete User",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/users/:user_id/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "users",
+                                ":user_id",
+                                ""
+                            ],
+                            "variable": [
+                                {
+                                    "key": "user_id",
+                                    "value": "123456"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "4. Driver Management",
+            "description": "Manage drivers and approval requests",
+            "item": [
+                {
+                    "name": "Get All Drivers",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/drivers/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "drivers",
+                                ""
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Driver Details",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/drivers/:driver_id/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "drivers",
+                                ":driver_id",
+                                ""
+                            ],
+                            "variable": [
+                                {
+                                    "key": "driver_id",
+                                    "value": "123456"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Delete Driver",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/drivers/:driver_id/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "drivers",
+                                ":driver_id",
+                                ""
+                            ],
+                            "variable": [
+                                {
+                                    "key": "driver_id",
+                                    "value": "123456"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get New Driver Requests",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/new-driver-requests/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "new-driver-requests",
+                                ""
+                            ]
+                        },
+                        "description": "Get all pending driver requests awaiting admin approval"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Approve Driver",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"action\": \"approve\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/approve-driver/:driver_id/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "approve-driver",
+                                ":driver_id",
+                                ""
+                            ],
+                            "variable": [
+                                {
+                                    "key": "driver_id",
+                                    "value": "123456"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Reject Driver",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"action\": \"reject\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/approve-driver/:driver_id/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "approve-driver",
+                                ":driver_id",
+                                ""
+                            ],
+                            "variable": [
+                                {
+                                    "key": "driver_id",
+                                    "value": "123456"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "5. Trip Tracking",
+            "description": "View all trips (running + completed)",
+            "item": [
+                {
+                    "name": "Get All Trips",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/trips/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "trips",
+                                ""
+                            ]
+                        },
+                        "description": "Get all trips with details: id, status, rider_name, driver_name, pickup_address, dropoff_address, created_at, estimated_price"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "6. Transactions",
+            "description": "Successful payments and earnings",
+            "item": [
+                {
+                    "name": "Get All Transactions",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/transactions/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "transactions",
+                                ""
+                            ]
+                        },
+                        "description": "Get all successful transactions with: id, ride_id, payer_name, amount, status, created_at"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "7. Notifications",
+            "description": "System notifications",
+            "item": [
+                {
+                    "name": "Get All Notifications",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/notifications/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "notifications",
+                                ""
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Create Notification",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"title\": \"System Update\",\n    \"message\": \"New features have been released!\",\n    \"user\": null\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/platform/admin/notifications/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "platform",
+                                "admin",
+                                "notifications",
+                                ""
+                            ]
+                        },
+                        "description": "Create a new notification. Set 'user' to null for system-wide, or provide user_id for personal notification."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "8. Settings",
+            "description": "Admin profile, password, static pages, and pricing",
+            "item": [
+                {
+                    "name": "Profile",
+                    "item": [
+                        {
+                            "name": "Get Admin Profile",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/platform/admin/profile/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "admin",
+                                        "profile",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Update Admin Name",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"full_name\": \"New Admin Name\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/platform/admin/profile/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "admin",
+                                        "profile",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "response": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Password",
+                    "item": [
+                        {
+                            "name": "Update Password",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"old_password\": \"current_password\",\n    \"new_password\": \"new_secure_password\",\n    \"confirm_new_password\": \"new_secure_password\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/platform/admin/password/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "admin",
+                                        "password",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "response": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Static Pages",
+                    "item": [
+                        {
+                            "name": "Get Terms & Conditions",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/platform/terms-and-conditions/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "terms-and-conditions",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Update Terms & Conditions",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"content\": \"<h1>Terms and Conditions</h1><p>Updated content here...</p>\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/platform/terms-and-conditions/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "terms-and-conditions",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Get Privacy Policy",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/platform/privacy-and-policy/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "privacy-and-policy",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Update Privacy Policy",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"content\": \"<h1>Privacy Policy</h1><p>Updated content here...</p>\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/platform/privacy-and-policy/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "privacy-and-policy",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Get About Us",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/platform/about-us/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "about-us",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Update About Us",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"content\": \"<h1>About Us</h1><p>Updated content here...</p>\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/platform/about-us/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "about-us",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "response": []
+                        }
+                    ]
+                },
+                {
+                    "name": "Dynamic Pricing",
+                    "item": [
+                        {
+                            "name": "Get All Pricing Configs",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/platform/admin/pricing/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "admin",
+                                        "pricing",
+                                        ""
+                                    ]
+                                },
+                                "description": "Get all pricing configurations for different vehicle types"
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Get Pricing Config by ID",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/platform/admin/pricing/:id/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "admin",
+                                        "pricing",
+                                        ":id",
+                                        ""
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "id",
+                                            "value": "1"
+                                        }
+                                    ]
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Create Pricing Config",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"vehicle_type\": \"ECONOMY\",\n    \"base_fare\": \"5.00\",\n    \"price_per_km\": \"2.50\",\n    \"price_per_minute\": \"0.50\",\n    \"aruba_tax_percentage\": \"7.00\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/platform/admin/pricing/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "admin",
+                                        "pricing",
+                                        ""
+                                    ]
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Update Pricing Config",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"base_fare\": \"6.00\",\n    \"price_per_km\": \"3.00\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/platform/admin/pricing/:id/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "admin",
+                                        "pricing",
+                                        ":id",
+                                        ""
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "id",
+                                            "value": "1"
+                                        }
+                                    ]
+                                },
+                                "description": "Update dynamic pricing fields like base_fare, price_per_km, price_per_minute, aruba_tax_percentage"
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Delete Pricing Config",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/platform/admin/pricing/:id/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "platform",
+                                        "admin",
+                                        "pricing",
+                                        ":id",
+                                        ""
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "id",
+                                            "value": "1"
+                                        }
+                                    ]
+                                }
+                            },
+                            "response": []
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

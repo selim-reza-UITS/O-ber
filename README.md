@@ -4,12 +4,13 @@ O-ber is a robust backend system for a ride-sharing application, built with Djan
 
 ## 🚀 Tech Stack
 
-- **Framework:** Django 6.0 & Django REST Framework (DRF)
+- **Framework:** Django 5.1 & Django REST Framework (DRF)
 - **Real-time:** Django Channels (Daphne), WebSocket
 - **Database:** PostgreSQL with PostGIS (for geospatial data)
 - **Async Tasks:** Celery with Redis
 - **Containerization:** Docker & Docker Compose
 - **Authentication:** JWT (SimpleJWT)
+- **KYC Service:** FastAPI based (Optional microservice)
 
 ## 📂 Project Structure
 
@@ -18,8 +19,8 @@ The project is structured into modular Django apps:
 - **`accounts`**: User authentication, profiles (Rider/Driver), OTP verification.
 - **`riders`**: Ride management, booking requests, ride history.
 - **`drivers`**: Driver availability, shift tracking, ride acceptance.
-- **`dashboard`**: Admin/Platform level operations (Terms, Privacy, Admin approvals).
-- **`payments`**: (Stub/Planned) Payment processing integration.
+- **`dashboard`**: Admin/Platform level operations (Admin Dashboard APIs).
+- **`payments`**: Stripe Checkout integration & Transaction management.
 - **`api`**: Centralized API URL routing.
 
 ## ✨ Key Features
@@ -29,10 +30,12 @@ The project is structured into modular Django apps:
     - Real-time location updates using PostGIS.
     - Proximity-based driver discovery.
 - **Live WebSocket Features:**
-    - **Driver Discovery:** Drivers receive ride requests in real-time based on vehicle type.
+    - **Driver Discovery:** Drivers receive ride requests in real-time.
     - **Trip Tracking:** Riders see driver location updates live.
     - **In-Ride Chat:** Real-time chat between rider and driver.
-- **Driver Verification:** KYC flow for uploading license and vehicle documents (with placeholders for AI verification).
+- **Driver Verification:** KYC flow for uploading license and vehicle documents.
+- **Admin Dashboard:** Comprehensive APIs for managing users, drivers, and platform settings.
+- **Payments:** Stripe Checkout Sessions flow for secure ride payments.
 
 ## 🛠 Setup & Installation
 
@@ -40,6 +43,7 @@ The project is fully dockerized for easy setup.
 
 ### Prerequisites
 - Docker & Docker Compose
+- Make (optional, but recommended)
 
 ### Running the Project
 
@@ -53,19 +57,29 @@ The project is fully dockerized for easy setup.
    Create a `.env` file in the root directory (use `.env-sample` as a reference).
 
 3. **Build and Run:**
+   Using the **Makefile**:
+   ```bash
+   make build
+   ```
+   Or using **Docker Compose**:
    ```bash
    docker-compose up --build
    ```
-   This will start:
-   - **Web Container**: Django ASGI app (Daphne) on port `9700`.
-   - **Worker**: Celery worker for background tasks.
-   - **Database**: PostGIS/PostgreSQL on port `5431`.
-   - **Redis**: For caching and channel layers on port `6378`.
-   - **Nginx**: Reverse proxy serving static/media files on port `80`.
 
-4. **Access the API:**
-   - API Root: `http://localhost:80/api/v1/`
-   - Admin Panel: `http://localhost:80/admin/`
+## 📜 Makefile Guide
+
+The following commands are available via `make`:
+
+- `make up`: Start all services (detached).
+- `make down`: Stop and remove all containers.
+- `make build`: Rebuild and start services.
+- `make logs`: View logs for all services.
+- `make logs-backend`: View logs for the Django backend specifically.
+- `make migrate`: Run database migrations.
+- `make makemigrations`: Create new migrations.
+- `make createsuperuser`: Create an admin account.
+- `make shell`: Open the Django shell.
+- `make clean`: Remove `__pycache__` and temporary files.
 
 ## 📡 API Overview
 
@@ -73,15 +87,11 @@ The project is fully dockerized for easy setup.
 - `POST /api/v1/auth/signup/` - Register new user.
 - `POST /api/v1/auth/login/` - Login and get JWT pair.
 
-### Rider Operations
-- `POST /api/v1/rider/ride/create/` - Request a ride.
-- `GET /api/v1/rider/ride/history/` - View past rides.
-
-### Driver Operations
-- `POST /api/v1/drivers/driver-onboarding/` - Submit KYC/Vehicle info.
-- `POST /api/v1/drivers/toggle-online/` - Go Online/Offline.
-- `POST /api/v1/drivers/location-update/` - Update current coordinates.
-- `POST /api/v1/drivers/accept-ride/<id>/` - Accept a pending ride request.
+### Admin Dashboard (New)
+- `GET /api/v1/dashboard/stats/` - Overview of platform performance.
+- `GET /api/v1/dashboard/drivers/approval-pending/` - List drivers waiting for approval.
+- `PATCH /api/v1/dashboard/settings/pricing/` - Update fee configurations.
+- [View Full Postman Collection](admin_dashboard_postman_collection.json)
 
 ### Real-time (WebSockets)
 - `ws://host/ws/drivers/discovery/?vehicle_type=ECONOMY` - For drivers to find rides.

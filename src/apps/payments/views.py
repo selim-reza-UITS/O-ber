@@ -59,19 +59,20 @@ class UpdateRideStatusView(APIView):
         ride.status = new_status
         
         if new_status == 'COMPLETED':
-            intent_id, pay_status = process_ride_payment(ride)
+            session_id, session_url, pay_status = process_ride_payment(ride)
             
             Transaction.objects.create(
                 ride=ride, 
                 amount=ride.estimated_price, 
                 status=pay_status,
-                stripe_payment_intent_id=intent_id if intent_id else ''
+                stripe_payment_intent_id=session_id if session_id else '' # Using session_id as the ref for now
             )
             
             broadcast_ride_update(ride.id, {
                 "type": "TRIP_COMPLETED",
                 "final_fare": str(ride.estimated_price),
-                "payment_status": pay_status
+                "payment_status": pay_status,
+                "payment_url": session_url
             })
         else:
             broadcast_ride_update(ride.id, {
@@ -97,12 +98,27 @@ class StripeWebhookView(APIView):
         except (ValueError, stripe.error.SignatureVerificationError):
             return Response(status=400)
 
-        if event['type'] == 'payment_intent.succeeded':
+        if event['type'] == 'checkout.session.completed':
+            self.handle_checkout_success(event['data']['object'])
+        elif event['type'] == 'payment_intent.succeeded':
             self.handle_payment_success(event['data']['object'])
         elif event['type'] == 'payment_intent.payment_failed':
             self.handle_payment_failure(event['data']['object'])
 
         return Response(status=200)
+
+    def handle_checkout_success(self, session):
+        # We stored session_id in stripe_payment_intent_id field
+        transaction = Transaction.objects.filter(stripe_payment_intent_id=session['id']).first()
+        if transaction:
+            transaction.status = 'SUCCESS'
+            transaction.save()
+            
+            if transaction.ride:
+                broadcast_ride_update(transaction.ride.id, {
+                    "type": "PAYMENT_SUCCESS",
+                    "amount": str(transaction.amount)
+                })
 
     def handle_payment_success(self, intent):
         transaction = Transaction.objects.filter(stripe_payment_intent_id=intent['id']).first()

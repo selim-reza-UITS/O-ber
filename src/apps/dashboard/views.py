@@ -8,7 +8,8 @@ from .models import TermsAndConditionsModel, PrivacyAndPolicyModel, AboutUs, Hel
 from .serializers import (
     TermsSerializer, PrivacySerializer, AboutUsSerializer, HelpSupportSerializer, 
     PriceConfigSerializer, NotificationSerializer, AdminUserListSerializer, 
-    AdminTransactionSerializer, AdminRideListSerializer
+    AdminTransactionSerializer, AdminRideListSerializer, AdminProfileSerializer,
+    AdminPasswordUpdateSerializer
 )
 from src.apps.accounts.models import DriverProfile, User, PendingDriverUpdate
 from src.apps.accounts.serializers_driver import DriverProfileSerializer
@@ -126,9 +127,19 @@ class AdminUserListView(generics.ListAPIView):
     queryset = User.objects.filter(is_rider=True)
     serializer_class = AdminUserListSerializer
 
+    def get(self, request, pk=None):
+        if pk:
+            try:
+                user = User.objects.get(pk=pk)
+                serializer = AdminUserListSerializer(user)
+                return Response(serializer.data)
+            except User.DoesNotExist:
+                return Response({"error": "User not found"}, status=404)
+        return super().get(request)
+
     def delete(self, request, pk):
         try:
-            user = User.objects.get(pk=pk, is_driver=False) # Prevent deleting drivers via rider endpoint accidentally?
+            user = User.objects.get(pk=pk, is_driver=False)
             user.delete()
             return Response({"message": "User deleted"})
         except User.DoesNotExist:
@@ -138,18 +149,24 @@ class AdminDriverListView(generics.ListAPIView):
     permission_classes = [permissions.IsAdminUser]
     queryset = DriverProfile.objects.all()
     serializer_class = DriverProfileSerializer
-    
+
+    def get(self, request, pk=None):
+        if pk:
+            try:
+                profile = DriverProfile.objects.get(user__user_id=pk)
+                serializer = DriverProfileSerializer(profile)
+                return Response(serializer.data)
+            except DriverProfile.DoesNotExist:
+                return Response({"error": "Driver not found"}, status=404)
+        return super().get(request)
+
     def delete(self, request, pk):
-        # pk here is user_id usually, or profile id? Let's check DriverProfileSerializer
-        # The serializer uses nested fields, so we expect ID to be profile ID or user ID. 
-        # For consistency with standard REST, let's assume `id` in URL is User ID or Profile ID.
-        # User ID is UUID, Profile ID is Int.
         try:
             profile = DriverProfile.objects.get(user__user_id=pk)
-            profile.user.delete() # Deleting user cascades to profile
+            profile.user.delete()
             return Response({"message": "Driver deleted"})
         except DriverProfile.DoesNotExist:
-             return Response({"error": "Driver not found"}, status=404)
+            return Response({"error": "Driver not found"}, status=404)
 
 class AdminDriverApprovalView(APIView):
     permission_classes = [permissions.IsAdminUser]
@@ -204,7 +221,14 @@ class AdminNotificationListView(generics.ListCreateAPIView):
 class AdminPriceConfigView(APIView):
     permission_classes = [permissions.IsAdminUser]
     
-    def get(self, request):
+    def get(self, request, pk=None):
+        if pk:
+            try:
+                config = PriceConfig.objects.get(pk=pk)
+                serializer = PriceConfigSerializer(config)
+                return Response(serializer.data)
+            except PriceConfig.DoesNotExist:
+                return Response({"error": "Config not found"}, status=404)
         configs = PriceConfig.objects.all()
         serializer = PriceConfigSerializer(configs, many=True)
         return Response(serializer.data)
@@ -216,6 +240,25 @@ class AdminPriceConfigView(APIView):
             return Response(serializer.data, status=201)
         return Response(serializer.errors, status=400)
 
+    def patch(self, request, pk):
+        try:
+            config = PriceConfig.objects.get(pk=pk)
+            serializer = PriceConfigSerializer(config, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=400)
+        except PriceConfig.DoesNotExist:
+            return Response({"error": "Config not found"}, status=404)
+
+    def delete(self, request, pk):
+        try:
+            config = PriceConfig.objects.get(pk=pk)
+            config.delete()
+            return Response({"message": "Pricing config deleted"})
+        except PriceConfig.DoesNotExist:
+            return Response({"error": "Config not found"}, status=404)
+
 class AdminReviewUpdateView(APIView):
     permission_classes = [permissions.IsAdminUser]
 
@@ -225,3 +268,32 @@ class AdminReviewUpdateView(APIView):
         driver_prof.save()
         pending.delete() 
         return Response({"message": "Profile updates applied."})
+
+
+class AdminProfileView(APIView):
+    """Admin can view and update their own profile (name only)"""
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        serializer = AdminProfileSerializer(request.user)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        serializer = AdminProfileSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminPasswordUpdateView(APIView):
+    """Admin can update their password"""
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request):
+        serializer = AdminPasswordUpdateSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            request.user.set_password(serializer.validated_data['new_password'])
+            request.user.save()
+            return Response({"message": "Password updated successfully."})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

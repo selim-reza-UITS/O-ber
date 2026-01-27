@@ -10,6 +10,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5431:5432"
+    networks:
+      - ober_network
 
   redis:
     image: redis:7-alpine
@@ -18,11 +20,13 @@ services:
       - "6378:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - ober_network
 
-  web:
+  backend:
     build: .
     container_name: ober_backend
-    command: daphne -b 0.0.0.0 -p 9700 src._config.asgi:application
+    command: daphne -b 0.0.0.0 -p 8000 src._config.asgi:application
     volumes:
       - .:/app 
       - media_data:/app/media
@@ -32,10 +36,29 @@ services:
     depends_on:
       - db
       - redis
+      - kyc_service
     environment:
       GDAL_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu/libgdal.so
       GEOS_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu/libgeos_c.so
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/1
+      KYC_SERVICE_URL: http://kyc_service:8000/verify-identity/
+    ports:
+      - "9500:8000"
+    networks:
+      - ober_network
 
+  kyc_service:
+    build: ./kyc_service
+    container_name: ober_kyc
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./kyc_service:/app
+    ports:
+      - "8001:8000"
+    networks:
+      - ober_network
 
   worker:
     build: .
@@ -46,6 +69,12 @@ services:
     depends_on:
       - db
       - redis
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/1
+    networks:
+      - ober_network
 
   nginx:
     image: nginx:alpine
@@ -57,10 +86,16 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - web
+      - backend
+    networks:
+      - ober_network
 
 volumes:
   postgres_data:
   media_data:
   static_data:
   redis_data:
+
+networks:
+  ober_network:
+    driver: bridge

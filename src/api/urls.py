@@ -49,7 +49,7 @@ driver_pattern = [
     path("verify-KYC/",driver_accounts.DriverSelfieVerifyView.as_view(),name="match-selfie"),
     path("location-update/",drivers.UpdateDriverLocationView.as_view(),name="location_update"),
     path("available-for-rides/",drivers.AvailableRidesView.as_view(),name="check all available rider list"),
-    path("accept-ride/<id>/",drivers.AcceptRideView.as_view(),name="accept_riders"),
+    path("accept-ride/<int:ride_id>/",drivers.AcceptRideView.as_view(),name="accept_riders"),
     path('toggle-online/', drivers.DriverToggleOnlineView.as_view(), name='driver-toggle-online'),
     path('dashboard/',drivers.DriverProfileDashboardView.as_view(),name="driver_profile"),
     path('earnings/',drivers.DriverEarningsView.as_view(),name="driver_earnings"),
@@ -75,6 +75,9 @@ dashboard_patterns = [
     path("admin/transactions/", dashboard.AdminTransactionListView.as_view(), name="admin_transactions"),
     path("admin/notifications/", dashboard.AdminNotificationListView.as_view(), name="admin_notifications"),
     path("admin/pricing/", dashboard.AdminPriceConfigView.as_view(), name="admin_pricing"),
+    path("admin/pricing/<int:pk>/", dashboard.AdminPriceConfigView.as_view(), name="admin_pricing_detail"),
+    path("admin/profile/", dashboard.AdminProfileView.as_view(), name="admin_profile"),
+    path("admin/password/", dashboard.AdminPasswordUpdateView.as_view(), name="admin_password"),
 ]
 
 urlpatterns = [

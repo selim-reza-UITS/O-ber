@@ -64,6 +64,8 @@ class UpdateDriverLocationView(APIView):
         except AttributeError:
             return Response({"error": "User does not have a driver profile"}, status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class AvailableRidesView(APIView):
