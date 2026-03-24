@@ -61,7 +61,7 @@
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n    \"login_id\": \"admin@ober.com\",\n    \"password\": \"your_password\"\n}"
+                            "raw": "{\n    \"login_id\": \"admin@gmail.com\",\n    \"password\": \"123\"\n}"
                         },
                         "url": {
                             "raw": "{{base_url}}/auth/login/",
