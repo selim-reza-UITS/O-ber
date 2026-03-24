@@ -133,4 +133,4 @@ COPY ./scripts /app/scripts
 RUN chmod +x /app/scripts/entrypoint.sh
 
 # Set the entrypoint
-CMD ["/app/scripts/entrypoint.sh"]
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
