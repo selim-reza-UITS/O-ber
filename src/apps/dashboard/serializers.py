@@ -36,7 +36,7 @@ class PriceConfigSerializer(serializers.ModelSerializer):
     def get_commission_data(self, obj):
         """Get commission data for this price config"""
         try:
-            commission = obj.commisions.latest('created_at')
+            commission = Commision.objects.latest('created_at')
             return {
                 'id': commission.id,
                 'platform_commission': float(commission.commision),
