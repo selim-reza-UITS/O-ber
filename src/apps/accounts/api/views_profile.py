@@ -18,18 +18,18 @@ class UserProfileView(APIView):
     def get(self, request):
         user = request.user
         
-        user_data = UserBaseSerializer(user).data
+        user_data = UserBaseSerializer(user, context={'request': request}).data
         
         rider_data = {}
         try:
-            rider_data = RiderProfileSerializer(user.rider_profile).data
+            rider_data = RiderProfileSerializer(user.rider_profile, context={'request': request}).data
         except RiderProfile.DoesNotExist:
             rider_data = None
 
         driver_data = None
         if user.is_driver:
             try:
-                driver_data = DriverProfileSerializer(user.driver_profile).data
+                driver_data = DriverProfileSerializer(user.driver_profile, context={'request': request}).data
             except DriverProfile.DoesNotExist:
                 driver_data = "Incomplete: Onboarding required"
 
@@ -52,7 +52,7 @@ class UserProfileUpdateView(APIView):
         if not user.is_driver:
             try:
                 rider_profile = user.rider_profile
-                serializer = RiderProfileUpdateSerializer(rider_profile, data=request.data, partial=True)
+                serializer = RiderProfileUpdateSerializer(rider_profile, data=request.data, partial=True, context={'request': request})
                 if serializer.is_valid():
                     serializer.save()
                     return Response({
@@ -70,7 +70,7 @@ class UserProfileUpdateView(APIView):
                 # We use update_or_create to allow only ONE pending request at a time
                 pending_update, created = PendingDriverUpdate.objects.get_or_create(driver=driver_profile)
                 
-                serializer = DriverPendingUpdateSerializer(pending_update, data=request.data, partial=True)
+                serializer = DriverPendingUpdateSerializer(pending_update, data=request.data, partial=True, context={'request': request})
                 if serializer.is_valid():
                     serializer.save()
                     

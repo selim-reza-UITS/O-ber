@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User,DriverProfile
+from .models import User,DriverProfile, PendingDriverUpdate
 # Register your models here.
 admin.site.register(User)
 
@@ -16,3 +16,6 @@ class DriverProfileAdmin(admin.ModelAdmin):
         for profile in queryset:
             profile.user.is_driver = True
             profile.user.save()
+
+
+admin.site.register(PendingDriverUpdate)

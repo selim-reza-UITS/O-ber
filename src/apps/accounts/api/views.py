@@ -85,6 +85,9 @@ class LoginView(views.APIView):
         if not user.check_password(password):
             print(f"DEBUG: Password check failed for {user.email}")
             return Response({"error": "Invalid password."}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if user.is_blocked:
+            return Response({"error": "Account is blocked. Please contact support."}, status=status.HTTP_403_FORBIDDEN)
 
         # 5. Check if active
         if not user.is_active:

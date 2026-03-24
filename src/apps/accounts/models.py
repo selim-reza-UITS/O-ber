@@ -14,17 +14,29 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     phone_number = models.CharField(max_length=15, unique=True)
     full_name = models.CharField(max_length=255)
+    admin_profile_image = models.ImageField(upload_to='admin/photos/', null=True, blank=True)
+
     
     is_rider = models.BooleanField(default=True)
     is_driver = models.BooleanField(default=False)
     
     # Stripe
     stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Wallet
+    wallet_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+
+    is_blocked = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['full_name', 'phone_number']
+    REQUIRED_FIELDS = []
 
     objects = CustomUserManager()
+    ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.full_name} ({self.email})"
@@ -41,6 +53,10 @@ class DriverProfile(models.Model):
     # Personal Info
     date_of_birth = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
+    
+    # ID Information
+    nid_number = models.CharField(max_length=50, null=True, blank=True, unique=True)
+    driver_license_number = models.CharField(max_length=50, null=True, blank=True, unique=True)
     
     # Verification Documents
     nid_front = models.ImageField(upload_to='drivers/documents/nid/')
@@ -60,8 +76,14 @@ class DriverProfile(models.Model):
     admin_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
     is_online = models.BooleanField(default=False)
+    is_rejected = models.BooleanField(default=False)
     # PostGIS field for real-time location
     last_location = models.PointField(null=True, blank=True, srid=4326)
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
 
 class VehicleImage(models.Model):
     driver = models.ForeignKey(DriverProfile, on_delete=models.CASCADE, related_name='vehicle_photos')
@@ -78,6 +100,8 @@ class PendingDriverUpdate(models.Model):
     full_name = models.CharField(max_length=255, null=True, blank=True)
     user_photo = models.ImageField(upload_to='drivers/pending/photos/', null=True, blank=True)
     gender = models.CharField(max_length=1, choices=DriverProfile.GENDER_CHOICES, null=True, blank=True)
+    nid_number = models.CharField(max_length=50, null=True, blank=True)
+    driver_license_number = models.CharField(max_length=50, null=True, blank=True)
     nid_front = models.ImageField(upload_to='drivers/pending/nid/', null=True, blank=True)
     nid_back = models.ImageField(upload_to='drivers/pending/nid/', null=True, blank=True)
     license_front = models.ImageField(upload_to='drivers/pending/license/', null=True, blank=True)

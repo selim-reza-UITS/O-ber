@@ -66,18 +66,35 @@ dashboard_patterns = [
     # Admin API
     path("admin/stats/", dashboard.AdminDashboardStatsView.as_view(), name="admin_stats"),
     path("admin/users/", dashboard.AdminUserListView.as_view(), name="admin_users"),
-    path("admin/users/<str:pk>/", dashboard.AdminUserListView.as_view(), name="admin_user_detail"),
+    path("admin/users/<str:pk>/", dashboard.AdminUserDetailView.as_view(), name="admin_user_detail"),
+
+    path("search/users/", dashboard.SearchUsersListView.as_view(), name="search_users"),
+
     path("admin/drivers/", dashboard.AdminDriverListView.as_view(), name="admin_drivers"),
-    path("admin/drivers/<str:pk>/", dashboard.AdminDriverListView.as_view(), name="admin_driver_detail"),
+    path("admin/drivers/<str:pk>/", dashboard.AdminDriverDetailView.as_view(), name="admin_driver_detail"),
     path("admin/approve-driver/<str:driver_id>/",dashboard.AdminDriverApprovalView.as_view(),name="approveDriver"), # PATCH
     path("admin/new-driver-requests/",dashboard.AdminDriverApprovalView.as_view(),name="newDriverRequests"), # GET
+    path("admin/block-user/<str:user_id>/", dashboard.AdminBlockUnblockUserView.as_view(), name="block_unblock_user"),
+
     path("admin/trips/", dashboard.AdminTripListView.as_view(), name="admin_trips"),
+    path("admin/trips/<int:ride_id>/", dashboard.AdminTripDetailView.as_view(), name="admin_trip_detail"),
+    path("admin/driver-trips/<str:driver_id>/", dashboard.TripTrackingByDriverView.as_view(), name="driver_trip_tracking"),
+    
     path("admin/transactions/", dashboard.AdminTransactionListView.as_view(), name="admin_transactions"),
+    path("admin/transactions/delete/<int:pk>/", dashboard.AdminTransactionDeleteView.as_view(), name="admin_transaction_delete"),
     path("admin/notifications/", dashboard.AdminNotificationListView.as_view(), name="admin_notifications"),
+    path("admin/notifications/delete/<int:pk>/", dashboard.AdminNotificationDeleteView.as_view(), name="admin_notification_delete"),
     path("admin/pricing/", dashboard.AdminPriceConfigView.as_view(), name="admin_pricing"),
     path("admin/pricing/<int:pk>/", dashboard.AdminPriceConfigView.as_view(), name="admin_pricing_detail"),
     path("admin/profile/", dashboard.AdminProfileView.as_view(), name="admin_profile"),
     path("admin/password/", dashboard.AdminPasswordUpdateView.as_view(), name="admin_password"),
+
+    path("admin/normal-users/", dashboard.NormalUserList.as_view(), name="admin_normal_users"),
+
+    path("admin/withdrawals/", dashboard.CashWithdrawView.as_view(), name="admin_withdrawals"),
+
+    path("commision/list/create/", dashboard.CommisionListCreateView.as_view(), name="commision_list_create"),
+    path("commision/details/and/delete/<int:pk>/", dashboard.CommisionDetailsandDeleteView.as_view(), name="commision_detail_delete"),
 ]
 
 urlpatterns = [

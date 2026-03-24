@@ -1,20 +1,32 @@
 from django.db.models import Sum, Count, F
 from django.db.models.functions import TruncMonth, TruncYear
-from src.apps.payments.models import Transaction
+from src.apps.payments.models import Transaction, Withdrawal
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions, generics
-from .models import TermsAndConditionsModel, PrivacyAndPolicyModel, AboutUs, HelpSupport, PriceConfig, Notification
+from rest_framework.pagination import PageNumberPagination
+from .models import TermsAndConditionsModel, PrivacyAndPolicyModel, AboutUs, HelpSupport, PriceConfig, Notification, Commision
 from .serializers import (
     TermsSerializer, PrivacySerializer, AboutUsSerializer, HelpSupportSerializer, 
     PriceConfigSerializer, NotificationSerializer, AdminUserListSerializer, 
     AdminTransactionSerializer, AdminRideListSerializer, AdminProfileSerializer,
-    AdminPasswordUpdateSerializer
+    AdminPasswordUpdateSerializer, AdminDriverListSerializer, DriverDetailSerializer, AdminRideDetailSerializer, CashWithdrawSerializer, CommisionSerializer, BlockSerilaizer
 )
 from src.apps.accounts.models import DriverProfile, User, PendingDriverUpdate
 from src.apps.accounts.serializers_driver import DriverProfileSerializer
 from src.apps.accounts.services import SupportService
 from src.apps.riders.models import Ride
+from datetime import timedelta
+from django.utils import timezone
+from django.db.models import Q
+import stripe
+from django.conf import settings
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 
 class StaticContentBaseView(APIView):
     """Base View to handle Singleton-like behavior for static content"""
@@ -77,22 +89,39 @@ class HelpSupportView(APIView):
             
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# --- NEW ADMIN VIEWS ---
 
+
+
+
+
+# --- NEW ADMIN VIEWS ---
 class AdminDashboardStatsView(APIView):
     permission_classes = [permissions.IsAdminUser]
 
     def get(self, request):
         year = request.query_params.get('year')
+        current_date = timezone.now()
+        last_month_start = (current_date.replace(day=1) - timedelta(days=1)).replace(day=1)
         
-        # 1. Totals
-        total_revenue = Transaction.objects.filter(status='SUCCESS').aggregate(Sum('amount'))['amount__sum'] or 0
-        total_users = User.objects.filter(is_rider=True).count()
-        total_drivers = DriverProfile.objects.filter(admin_verified=True).count()
+        # 1. Totals - Current Month
+        total_revenue = Transaction.objects.filter(status='SUCCESS', created_at__month=current_date.month, created_at__year=current_date.year).aggregate(Sum('amount'))['amount__sum'] or 0
+        total_users = User.objects.filter(is_rider=True, date_joined__month=current_date.month, date_joined__year=current_date.year).count()
+        total_drivers = DriverProfile.objects.filter(admin_verified=True, created_at__month=current_date.month, created_at__year=current_date.year).count()
         new_driver_requests = DriverProfile.objects.filter(admin_verified=False).count()
 
+        # Calculate Previous Month Totals for Percentage Change
+        last_revenue = Transaction.objects.filter(status='SUCCESS', created_at__month=last_month_start.month, created_at__year=last_month_start.year).aggregate(Sum('amount'))['amount__sum'] or 0
+        last_users = User.objects.filter(is_rider=True, date_joined__month=last_month_start.month, date_joined__year=last_month_start.year).count()
+        last_drivers = DriverProfile.objects.filter(admin_verified=True, created_at__month=last_month_start.month, created_at__year=last_month_start.year).count()
+        
+        # Calculate Percentage Changes
+        revenue_change = 0 if last_revenue == 0 else round(((total_revenue - last_revenue) / last_revenue) * 100, 2) if last_revenue > 0 else 0
+        users_change = 0 if last_users == 0 else round(((total_users - last_users) / last_users) * 100, 2) if last_users > 0 else 0
+        drivers_change = 0 if last_drivers == 0 else round(((total_drivers - last_drivers) / last_drivers) * 100, 2) if last_drivers > 0 else 0
+        requests_change = 0
+
         # 2. Growth (User) - Group by Month
-        user_growth_qs = User.objects.all()
+        user_growth_qs = User.objects.filter(is_rider=True)
         if year:
             user_growth_qs = user_growth_qs.filter(date_joined__year=year)
             
@@ -111,74 +140,127 @@ class AdminDashboardStatsView(APIView):
         
         return Response({
             "totals": {
-                "revenue": total_revenue,
-                "users": total_users,
-                "drivers": total_drivers,
-                "new_driver_requests": new_driver_requests
+                "revenue": {
+                    "value": int(total_revenue) if total_revenue else 0,
+                    "change_percent": revenue_change
+                },
+                "users": {
+                    "value": total_users,
+                    "change_percent": users_change
+                },
+                "drivers": {
+                    "value": total_drivers,
+                    "change_percent": drivers_change
+                },
+                "new_driver_requests": {
+                    "value": new_driver_requests,
+                    "change_percent": requests_change
+                }
             },
             "growth": {
                 "users": user_growth,
                 "revenue": revenue_growth
             }
         })
+    
+
+
+
+
+class SearchUsersListView(generics.ListAPIView):
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = AdminUserListSerializer
+
+    def get_queryset(self):
+        query = self.request.query_params.get('q', '')
+        queryset = User.objects.all().order_by('-date_joined')
+        if query:
+            queryset = queryset.filter(
+                Q(full_name__icontains=query) |
+                Q(email__icontains=query) |
+                Q(phone_number__icontains=query)
+            )
+        return queryset
+
+
+
 
 class AdminUserListView(generics.ListAPIView):
     permission_classes = [permissions.IsAdminUser]
-    queryset = User.objects.filter(is_rider=True)
+    queryset = User.objects.all().order_by('-date_joined')
+    serializer_class = AdminUserListSerializer
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+
+class AdminUserDetailView(generics.RetrieveDestroyAPIView):
+    permission_classes = [permissions.IsAdminUser]
+    queryset = User.objects.all()
+    serializer_class = AdminUserListSerializer
+    lookup_field = 'pk'
+
+    def get_queryset(self):
+        return User.objects.filter(is_driver=False)
+
+    def delete(self, request, *args, **kwargs):
+        try:
+            user = self.get_object()
+            user.delete()
+            return Response({"message": "User deleted"}, status=status.HTTP_204_NO_CONTENT)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+
+
+    
+
+
+class NormalUserList(generics.ListAPIView):
+    permission_classes = [permissions.IsAdminUser]
+    queryset = User.objects.filter(is_driver=False)
     serializer_class = AdminUserListSerializer
 
-    def get(self, request, pk=None):
-        if pk:
-            try:
-                user = User.objects.get(pk=pk)
-                serializer = AdminUserListSerializer(user)
-                return Response(serializer.data)
-            except User.DoesNotExist:
-                return Response({"error": "User not found"}, status=404)
-        return super().get(request)
 
-    def delete(self, request, pk):
-        try:
-            user = User.objects.get(pk=pk, is_driver=False)
-            user.delete()
-            return Response({"message": "User deleted"})
-        except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=404)
+
+
 
 class AdminDriverListView(generics.ListAPIView):
     permission_classes = [permissions.IsAdminUser]
     queryset = DriverProfile.objects.all()
-    serializer_class = DriverProfileSerializer
+    serializer_class = AdminDriverListSerializer
 
-    def get(self, request, pk=None):
-        if pk:
-            try:
-                profile = DriverProfile.objects.get(user__user_id=pk)
-                serializer = DriverProfileSerializer(profile)
-                return Response(serializer.data)
-            except DriverProfile.DoesNotExist:
-                return Response({"error": "Driver not found"}, status=404)
-        return super().get(request)
 
-    def delete(self, request, pk):
+class AdminDriverDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [permissions.IsAdminUser]
+    queryset = DriverProfile.objects.all()
+    serializer_class = DriverDetailSerializer
+    lookup_field = 'user__user_id'
+    lookup_url_kwarg = 'pk'
+
+
+    def delete(self, request, *args, **kwargs):
         try:
-            profile = DriverProfile.objects.get(user__user_id=pk)
+            profile = self.get_object()
             profile.user.delete()
-            return Response({"message": "Driver deleted"})
+            return Response({"message": "Driver deleted"}, status=status.HTTP_204_NO_CONTENT)
         except DriverProfile.DoesNotExist:
-            return Response({"error": "Driver not found"}, status=404)
+            return Response({"error": "Driver not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
 
 class AdminDriverApprovalView(APIView):
     permission_classes = [permissions.IsAdminUser]
 
     def get(self, request):
-        """List all drivers waiting for verification"""
-        pending_drivers = DriverProfile.objects.filter(admin_verified=False)
-        serializer = DriverProfileSerializer(pending_drivers, many=True)
+        pending_drivers = DriverProfile.objects.filter(admin_verified=False, is_rejected=False)
+        serializer = AdminDriverListSerializer(pending_drivers, many=True, context={'request': request})
         return Response(serializer.data)
 
     def patch(self, request, driver_id):
-        """Approve a specific driver"""
+        """Approve or reject a specific driver"""
         try:
             driver_profile = DriverProfile.objects.get(user__user_id=driver_id)
             action = request.data.get('action') # 'approve' or 'reject'
@@ -186,6 +268,7 @@ class AdminDriverApprovalView(APIView):
             if action == 'approve':
                 driver_profile.admin_verified = True
                 driver_profile.is_active = True
+                driver_profile.is_rejected = False
                 driver_profile.save()
                 
                 # Notify
@@ -195,10 +278,30 @@ class AdminDriverApprovalView(APIView):
                     user=driver_profile.user
                 )
                 
-                return Response({"message": f"Driver {driver_profile.user.full_name} approved."})
+                serializer = DriverDetailSerializer(driver_profile)
+                return Response({
+                    "message": f"Driver {driver_profile.user.full_name} approved.",
+                    "data": serializer.data
+                })
             
             elif action == 'reject':
-                return Response({"message": "Driver rejected."})
+                driver_profile.is_rejected = True
+                driver_profile.admin_verified = False
+                driver_profile.is_active = False
+                driver_profile.save()
+                
+                # Notify
+                Notification.objects.create(
+                    title="Driver Application Rejected",
+                    message=f"Your driver application has been rejected.",
+                    user=driver_profile.user
+                )
+                
+                serializer = DriverDetailSerializer(driver_profile)
+                return Response({
+                    "message": f"Driver {driver_profile.user.full_name} rejected.",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
                 
         except DriverProfile.DoesNotExist:
             return Response({"error": "Driver not found"}, status=404)
@@ -208,15 +311,74 @@ class AdminTripListView(generics.ListAPIView):
     queryset = Ride.objects.all().order_by('-created_at')
     serializer_class = AdminRideListSerializer
 
+
+class AdminTripDetailView(generics.RetrieveAPIView):
+    permission_classes = [permissions.IsAdminUser]
+    queryset = Ride.objects.all()
+    serializer_class = AdminRideDetailSerializer
+    lookup_field = 'id'
+    lookup_url_kwarg = 'ride_id'
+
+
+class TripTrackingByDriverView(generics.ListAPIView):
+    """Admin can see driver's full ride history"""
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = AdminRideListSerializer
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        driver_id = self.kwargs.get('driver_id')
+        try:
+            # Get User object from user_id
+            user = User.objects.get(user_id=driver_id)
+            return Ride.objects.filter(driver=user).order_by('-created_at')
+        except User.DoesNotExist:
+            return Ride.objects.none()
+
+    def list(self, request, *args, **kwargs):
+        driver_id = self.kwargs.get('driver_id')
+        try:
+            # Get User object from user_id
+            user = User.objects.get(user_id=driver_id)
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                "message": f"Trip history for driver {user.full_name}",
+                "driver_id": user.user_id,
+                "driver_name": user.full_name,
+                "total_trips": queryset.count(),
+                "data": serializer.data
+            })
+        except User.DoesNotExist:
+            return Response({"error": "Driver not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
 class AdminTransactionListView(generics.ListAPIView):
     permission_classes = [permissions.IsAdminUser]
     queryset = Transaction.objects.filter(status='SUCCESS').order_by('-created_at')
     serializer_class = AdminTransactionSerializer
 
+
+class AdminTransactionDeleteView(generics.DestroyAPIView):
+    permission_classes = [permissions.IsAdminUser]
+    queryset = Transaction.objects.all()
+    serializer_class = AdminTransactionSerializer
+    lookup_field = 'pk'
+
 class AdminNotificationListView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAdminUser]
     queryset = Notification.objects.all().order_by('-created_at')
     serializer_class = NotificationSerializer
+
+
+class AdminNotificationDeleteView(generics.DestroyAPIView):
+    permission_classes = [permissions.IsAdminUser]
+    queryset = Notification.objects.all()
+    serializer_class = NotificationSerializer
+    lookup_field = 'pk'
 
 class AdminPriceConfigView(APIView):
     permission_classes = [permissions.IsAdminUser]
@@ -275,11 +437,11 @@ class AdminProfileView(APIView):
     permission_classes = [permissions.IsAdminUser]
 
     def get(self, request):
-        serializer = AdminProfileSerializer(request.user)
+        serializer = AdminProfileSerializer(request.user, context={'request': request})
         return Response(serializer.data)
 
     def patch(self, request):
-        serializer = AdminProfileSerializer(request.user, data=request.data, partial=True)
+        serializer = AdminProfileSerializer(request.user, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -297,3 +459,148 @@ class AdminPasswordUpdateView(APIView):
             request.user.save()
             return Response({"message": "Password updated successfully."})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminBlockUnblockUserView(APIView):
+
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = BlockSerilaizer
+
+    def patch(self, request, user_id):
+        try:
+            user = User.objects.get(user_id=user_id)
+            is_blocked = request.data.get('is_blocked', user.is_blocked)
+            reason = request.data.get('reason', '')
+            
+            if isinstance(is_blocked, str):
+                is_blocked = is_blocked.lower() in ['true', '1', 'yes']
+            
+            user.is_blocked = is_blocked
+            user.is_active = not is_blocked
+            user.save()
+            
+            # Create notification
+            if is_blocked:
+                Notification.objects.create(
+                    user=user,
+                    title="Account Blocked",
+                    message=f"Your account has been blocked. Reason: {reason}" if reason else "Your account has been blocked."
+                )
+            else:
+                Notification.objects.create(
+                    user=user,
+                    title="Account Unblocked",
+                    message="Your account has been unblocked."
+                )
+            
+            return Response({"message": "User Blocked status updated.", "data": BlockSerilaizer(user).data})
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+
+class CashWithdrawView(generics.CreateAPIView):
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = CashWithdrawSerializer
+
+    def create(self, request, *args, **kwargs):
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)        
+        user = request.user
+        amount = serializer.validated_data['amount']
+        currency = serializer.validated_data['currency']
+        destination_account = serializer.validated_data['destination_account']
+        transfer_group = serializer.validated_data.get('transfer_group', '')
+        
+        # Check if user has sufficient balance
+        if float(user.wallet_balance) < float(amount):
+            return Response(
+                {"error": "Insufficient wallet balance"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Create Stripe transfer
+            transfer = stripe.Transfer.create(
+                amount=int(amount * 100),  # Convert to cents
+                currency=currency.lower(),
+                destination=destination_account,
+                transfer_group=transfer_group if transfer_group else f"WITHDRAWAL_{user.user_id}_{timezone.now().timestamp()}"
+            )
+            
+            # If transfer successful, create Withdrawal record
+            withdrawal = Withdrawal.objects.create(
+                user=user,
+                amount=amount,
+                currency=currency,
+                destination_account=destination_account,
+                transfer_group=transfer_group,
+                stripe_transfer_id=transfer['id'],
+                status='SUCCESS'
+            )
+            
+            # Deduct amount from user's wallet balance
+            user.wallet_balance = float(user.wallet_balance) - float(amount)
+            user.save()
+            
+            return Response({
+                "message": "Withdrawal successful",
+                "withdrawal_id": withdrawal.id,
+                "stripe_transfer_id": transfer['id'],
+                "amount": str(amount),
+                "currency": currency,
+                "remaining_balance": str(user.wallet_balance),
+                "status": "SUCCESS"
+            }, status=status.HTTP_201_CREATED)
+            
+        except stripe.error.InvalidRequestError as e:
+            return Response(
+                {"error": f"Invalid Stripe request: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except stripe.error.AuthenticationError as e:
+            return Response(
+                {"error": "Authentication error with Stripe"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except stripe.error.StripeError as e:
+            # Create failed withdrawal record
+            Withdrawal.objects.create(
+                user=user,
+                amount=amount,
+                currency=currency,
+                destination_account=destination_account,
+                transfer_group=transfer_group,
+                status='FAILED'
+            )
+            return Response(
+                {"error": f"Stripe error: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Error processing withdrawal: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
+
+class CommisionListCreateView(generics.ListCreateAPIView):
+    permission_classes = [permissions.IsAdminUser]
+    queryset = Commision.objects.all().order_by('-created_at')
+    serializer_class = CommisionSerializer
+    
+    def perform_create(self, serializer):
+        serializer.save()
+
+
+class CommisionDetailsandDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [permissions.IsAdminUser]
+    queryset = Commision.objects.all()
+    serializer_class = CommisionSerializer
+    lookup_field = 'pk'
+    
+    def perform_update(self, serializer):
+        serializer.save()

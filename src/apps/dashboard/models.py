@@ -136,14 +136,36 @@ class PriceConfig(models.Model):
     def __str__(self):
         return f"Pricing for {self.vehicle_type}"
 
+
+class Commision(models.Model):
+    commision = models.DecimalField(max_digits=5, decimal_places=2)  # percentage - GLOBAL for all drivers
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Global Commission: {self.commision}% (Platform) | {100 - self.commision}% (Drivers)"
+    
+    def save(self, *args, **kwargs):
+        if not self.pk and Commision.objects.exists():
+            existing = Commision.objects.first()
+            existing.commision = self.commision
+            existing.save()
+            return
+        super().save(*args, **kwargs)
+
+
+
+
+
 class Notification(models.Model):
     title = models.CharField(max_length=255)
     message = models.TextField()
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     
-    # Optional: Link to a specific user if it's personal, or null for system-wide
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
         return self.title
+    
+

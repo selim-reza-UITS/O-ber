@@ -26,6 +26,11 @@ class Ride(models.Model):
         choices=[('ECONOMY', 'Economy'), ('XL', 'Van/XL'), ('PREMIUM', 'Premium')],
         default='ECONOMY'
     )
+    payment_method = models.CharField(
+        max_length=10,
+        choices=[('CASH', 'Cash'), ('CARD', 'Card')],
+        default='CASH'
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SEARCHING')
     
     # Pricing
@@ -33,6 +38,11 @@ class Ride(models.Model):
     final_price = models.DecimalField(max_digits=10, decimal_places=2, null=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # Timestamps for ride events
+    arrival_time = models.DateTimeField(null=True, blank=True)
+    start_time = models.DateTimeField(null=True, blank=True)
+    drop_off_time = models.DateTimeField(null=True, blank=True)
 
     # Cancellation
     cancelled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='cancelled_rides')

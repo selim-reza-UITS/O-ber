@@ -11,10 +11,10 @@ class DriverProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DriverProfile
-        fields = [
+        fields = [ 'id',
             'user_photo', 'date_of_birth', 'gender', 
             'nid_front', 'nid_back', 'license_front', 'license_back',
             'vehicle_type', 'vehicle_brand', 'vehicle_model', 'registration_photo',
-            'ai_verified', 'admin_verified', 'vehicle_photos'
+            'ai_verified', 'admin_verified', 'vehicle_photos', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['ai_verified', 'admin_verified']
+        read_only_fields = ['ai_verified', 'admin_verified', 'created_at', 'updated_at']

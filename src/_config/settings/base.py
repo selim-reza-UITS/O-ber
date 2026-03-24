@@ -5,7 +5,7 @@ from datetime import timedelta  # noqa: F401
 from dotenv import load_dotenv
 load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -27,8 +27,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.gis',
     'rest_framework',
-    'corsheaders',
     'channels',
+    'whitenoise',
+    'drf_yasg',
     'src.apps.accounts',
     'src.apps.dashboard',
     'src.apps.drivers',
@@ -38,14 +39,26 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+CSRF_TRUSTED_ORIGINS = ["http://172.252.13.85:8888"]
+
+# Trust X-Forwarded-* headers from nginx proxy
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+USE_X_FORWARDED_PROTO = True
+
+# For development, you can also disable CSRF checks
+# CSRF_COOKIE_SECURE = False
+# CSRF_COOKIE_HTTPONLY = False
+# CSRF_COOKIE_SAMESITE = False
 
 ROOT_URLCONF = 'src._config.urls'
 
@@ -123,7 +136,15 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+WHITENOISE_AUTOREFRESH = True
+WHITENOISE_USE_FINDERS = True
+
+# Media files
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
 AUTH_USER_MODEL = 'accounts.User'
@@ -132,6 +153,8 @@ AUTHENTICATION_BACKENDS = [
     'src.apps.accounts.backends.EmailOrPhoneBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
+
+
 
 
 REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
@@ -168,6 +191,3 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 ADMIN_SUPPORT_EMAIL = EMAIL_HOST_USER
-
-# Allow all origins for local app development (Flutter/React)
-CORS_ALLOW_ALL_ORIGINS = True
