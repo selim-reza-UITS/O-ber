@@ -1,4 +1,6 @@
 .env
+.env.*
+*.env
 venv
 docker-compose-local.yml
 scripts/entrypoint_local.sh
@@ -14,3 +16,5 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+.agent
+.agent/

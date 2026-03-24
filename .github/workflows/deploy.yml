@@ -1,0 +1,55 @@
+name: Deploy to Production (VPS)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+
+            PROJECT_DIR="/var/www/O-ber"
+            cd "$PROJECT_DIR"
+
+            echo "==> Pulling latest changes..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "==> Building and deploying containers..."
+            docker compose down --remove-orphans
+            docker compose up -d --build
+
+            echo "==> Waiting for backend to start..."
+            sleep 10
+
+            echo "==> Health check..."
+            if docker compose ps backend | grep -q "Up"; then
+              echo "✅ Backend is running"
+            else
+              echo "❌ Backend failed to start"
+              docker compose logs --tail=50 backend
+              exit 1
+            fi
+
+            echo "==> Checking all services..."
+            docker compose ps
+
+            echo "==> Pruning old images..."
+            docker image prune -f
+
+            echo "✅ Deployment complete!"
