@@ -8,7 +8,7 @@ def verify_identity(img1_path: str, img2_path: str):
         result = DeepFace.verify(
             img1_path=img1_path,
             img2_path=img2_path,
-            model_name="ArcFace",        
+            model_name="Facenet512",        
             detector_backend="retinaface", 
             distance_metric="cosine"
         )
