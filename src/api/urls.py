@@ -46,6 +46,7 @@ rider_pattern = [
 # rider_websocket_pattern = []
 
 driver_pattern = [
+    path("accounts/profile/update/",accounts_profile.UserProfileUpdateView.as_view(),name="driver_profile_update"),
     path("driver-onboarding/",driver_accounts.DriverOnboardingView.as_view(),name="onboarding"),
     path("verify-KYC/",driver_accounts.DriverSelfieVerifyView.as_view(),name="match-selfie"),
     path("location-update/",drivers.UpdateDriverLocationView.as_view(),name="location_update"),
