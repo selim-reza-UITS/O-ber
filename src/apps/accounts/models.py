@@ -85,6 +85,16 @@ class DriverProfile(models.Model):
 
 
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Synchronize `user.is_driver` whenever `admin_verified` and `is_active` change.
+        # Ensure 'user' is loaded to avoid accidental lazy loading crashes
+        if hasattr(self, 'user') and self.user is not None:
+            should_be_driver = self.admin_verified and self.is_active
+            if self.user.is_driver != should_be_driver:
+                self.user.is_driver = should_be_driver
+                self.user.save(update_fields=['is_driver'])
+
 class VehicleImage(models.Model):
     driver = models.ForeignKey(DriverProfile, on_delete=models.CASCADE, related_name='vehicle_photos')
     image = models.ImageField(upload_to='drivers/vehicles/multiple/')
