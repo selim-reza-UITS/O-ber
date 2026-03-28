@@ -30,6 +30,7 @@ password_management = [
 
 rider_pattern = [
     path("accounts/profile/",accounts_profile.UserProfileView.as_view(),name="Profile"),
+    path("accounts/profile/update/",accounts_profile.UserProfileUpdateView.as_view(),name="profile_update"),
     path("ride/estimate/",riders.FareEstimateView.as_view(),name="fare_estimate"),
     path("ride/create/",riders.CreateRideView.as_view(),name="request_for_a_ride"),
     path("ride/history/",riders.RideHistoryView.as_view(),name="all_ride_history"),
