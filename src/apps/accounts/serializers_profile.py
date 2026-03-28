@@ -77,17 +77,23 @@ class DriverProfileSerializer(serializers.ModelSerializer):
     
 
 class RiderProfileUpdateSerializer(serializers.ModelSerializer):
-    full_name = serializers.CharField(source='user.full_name')
+    full_name = serializers.CharField(source='user.full_name', required=False)
+    phone_number = serializers.CharField(source='user.phone_number', required=False)
 
     class Meta:
         model = RiderProfile
-        fields = ['full_name', 'user_photo']
+        fields = ['full_name', 'phone_number', 'user_photo']
 
     def update(self, instance, validated_data):
-        # Update User model (full_name)
+        # Update User model (full_name, phone_number)
         user_data = validated_data.pop('user', {})
+        
         if 'full_name' in user_data:
             instance.user.full_name = user_data['full_name']
+        if 'phone_number' in user_data:
+            instance.user.phone_number = user_data['phone_number']
+            
+        if user_data:
             instance.user.save()
         
         # Update RiderProfile (user_photo)
