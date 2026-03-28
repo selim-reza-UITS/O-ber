@@ -5,28 +5,7 @@ class UserBaseSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ['user_id', 'full_name', 'email', 'phone_number', 'is_rider', 'is_driver', 'admin_profile_image']
-
-    def to_representation(self, instance):
-        print("=== to_representation called ===")
-        data = super().to_representation(instance)
-        request = self.context.get('request')
-        print(f"Request in to_representation: {request}")
-        print(f"admin_profile_image: {instance.admin_profile_image}")
-        
-        # Build absolute URL for admin_profile_image
-        if instance.admin_profile_image and request:
-            url = request.build_absolute_uri(instance.admin_profile_image.url)
-            print(f"Built absolute URL: {url}")
-            data['admin_profile_image'] = url
-        elif instance.admin_profile_image:
-            print(f"No request, using relative: {instance.admin_profile_image.url}")
-            data['admin_profile_image'] = instance.admin_profile_image.url
-        else:
-            data['admin_profile_image'] = None
-            
-        print(f"Final data: {data}")
-        return data
+        fields = ['user_id', 'full_name', 'email', 'phone_number', 'is_rider', 'is_driver']
 
 class RiderProfileSerializer(serializers.ModelSerializer):
     

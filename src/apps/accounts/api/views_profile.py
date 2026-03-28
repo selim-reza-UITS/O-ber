@@ -33,11 +33,18 @@ class UserProfileView(APIView):
             except DriverProfile.DoesNotExist:
                 driver_data = "Incomplete: Onboarding required"
 
-        response_data = {
-            "user": [user_data],
-            "rider_profile": [rider_data] if rider_data else [],
-            "driver_profile": [driver_data] if driver_data else []
-        }
+        # Combine into a single flattened dictionary
+        response_data = {}
+        response_data.update(user_data)
+        
+        if rider_data:
+            response_data.update(rider_data)
+            # 'id' from RiderProfile is less useful than user_id, remove if present to avoid confusion
+            if 'id' in response_data:
+                del response_data['id']
+
+        if user.is_driver and driver_data and isinstance(driver_data, dict):
+            response_data['driver_profile'] = driver_data
 
         return Response(response_data, status=status.HTTP_200_OK)
     
