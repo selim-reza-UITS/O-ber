@@ -32,7 +32,7 @@ class SignUpView(APIView):
             with transaction.atomic():
                 user = User.objects.create_user(
                     email=serializer.validated_data['email'],
-                    phone_number=serializer.validated_data['phone_number'],
+                    phone_number=serializer.validated_data.get('phone_number', None),
                     full_name=serializer.validated_data['full_name'],
                     password=serializer.validated_data['password']
                 )

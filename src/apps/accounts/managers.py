@@ -9,9 +9,6 @@ class CustomUserManager(BaseUserManager):
         # Set defaults for required fields if not provided
         if 'full_name' not in extra_fields or not extra_fields['full_name']:
             extra_fields['full_name'] = email.split('@')[0]
-        if 'phone_number' not in extra_fields or not extra_fields['phone_number']:
-            extra_fields['phone_number'] = f'admin_{email.split("@")[0]}'[:15]
-        
         user = self.model(email=email, **extra_fields)
         if password:
             user.set_password(password)

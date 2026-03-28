@@ -16,6 +16,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 class SignUpSerializer(serializers.ModelSerializer):
     confirm_password = serializers.CharField(write_only=True)
+    phone_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = User
@@ -27,6 +28,8 @@ class SignUpSerializer(serializers.ModelSerializer):
         """
         Validates Aruba (+297) phone numbers
         """
+        if not value:
+            return None
         try:
             parsed_number = phonenumbers.parse(value, "AW")
             
@@ -57,7 +60,7 @@ class SignUpSerializer(serializers.ModelSerializer):
             email=validated_data['email'],
             password=validated_data['password'],
             full_name=validated_data['full_name'],
-            phone_number=validated_data['phone_number'],
+            phone_number=validated_data.get('phone_number', None),
             is_rider=True # Default to rider
         )
         
