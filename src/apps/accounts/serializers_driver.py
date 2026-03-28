@@ -2,9 +2,20 @@ from rest_framework import serializers
 from .models import DriverProfile, VehicleImage
 
 class VehicleImageSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
     class Meta:
         model = VehicleImage
         fields = ['id', 'image']
+
+    def get_image(self, obj):
+        request = self.context.get('request')
+        if obj.image:
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            # fallback for environments where request context is missing
+            return f"https://api.rydeislands.com{obj.image.url}"
+        return None
 
 class DriverProfileSerializer(serializers.ModelSerializer):
     vehicle_photos = VehicleImageSerializer(many=True, read_only=True)
