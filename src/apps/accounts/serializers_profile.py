@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User,RiderProfile,DriverProfile,VehicleImage,PendingDriverUpdate
+from .models import User,RiderProfile,DriverProfile,VehicleImage
 
 class UserBaseSerializer(serializers.ModelSerializer):
     
@@ -101,7 +101,25 @@ class RiderProfileUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-class DriverPendingUpdateSerializer(serializers.ModelSerializer):
+class DriverProfileUpdateSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField(source='user.full_name', required=False)
+    phone_number = serializers.CharField(source='user.phone_number', required=False)
+
     class Meta:
-        model = PendingDriverUpdate
-        exclude = ['driver', 'created_at']
+        model = DriverProfile
+        fields = ['full_name', 'phone_number', 'user_photo']
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop('user', {})
+        
+        if 'full_name' in user_data:
+            instance.user.full_name = user_data['full_name']
+        if 'phone_number' in user_data:
+            instance.user.phone_number = user_data['phone_number']
+            
+        if user_data:
+            instance.user.save()
+        
+        instance.user_photo = validated_data.get('user_photo', instance.user_photo)
+        instance.save()
+        return instance

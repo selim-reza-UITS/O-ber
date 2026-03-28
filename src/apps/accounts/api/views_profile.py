@@ -4,12 +4,10 @@ from rest_framework.response import Response
 from rest_framework import permissions, status
 from ..serializers_profile import (
     UserBaseSerializer, 
-    RiderProfileSerializer, 
-    DriverProfileSerializer,
-    RiderProfileUpdateSerializer,
-    DriverPendingUpdateSerializer,
+    RiderProfileSerializer, DriverProfileSerializer, DriverPendingUpdateSerializer,
+    RiderProfileUpdateSerializer, DriverProfileUpdateSerializer
 )
-from ..models import DriverProfile, RiderProfile,PendingDriverUpdate
+from ..models import DriverProfile, RiderProfile
 from rest_framework.parsers import MultiPartParser,FormParser
 
 class UserProfileView(APIView):
@@ -70,47 +68,18 @@ class UserProfileUpdateView(APIView):
             except RiderProfile.DoesNotExist:
                 return Response({"error": "Rider profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # CASE 2: DRIVER UPDATE (Queued for Approval)
+        # CASE 2: DRIVER UPDATE (Instant)
         else:
             try:
                 driver_profile = user.driver_profile
-                # We use update_or_create to allow only ONE pending request at a time
-                pending_update, created = PendingDriverUpdate.objects.get_or_create(driver=driver_profile)
+                serializer = DriverProfileUpdateSerializer(driver_profile, data=request.data, partial=True, context={'request': request})
                 
-                serializer = DriverPendingUpdateSerializer(pending_update, data=request.data, partial=True, context={'request': request})
                 if serializer.is_valid():
                     serializer.save()
-                    
-                    # Mark profile as unverified while change is pending if necessary
-                    # driver_profile.admin_verified = False 
-                    # driver_profile.save()
-
                     return Response({
-                        "message": "Update request submitted for Admin review.",
-                        "status": "PENDING_APPROVAL"
-                    }, status=status.HTTP_202_ACCEPTED)
+                        "message": "Driver profile updated successfully",
+                        "data": serializer.data
+                    }, status=status.HTTP_200_OK)
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             except DriverProfile.DoesNotExist:
                 return Response({"error": "Driver profile not found"}, status=status.HTTP_404_NOT_FOUND)
-            
-            
-@admin.action(description="Approve selected updates and apply to live profile")
-def approve_driver_updates(modeladmin, request, queryset):
-    for pending in queryset:
-        driver = pending.driver
-        if pending.full_name:
-            driver.user.full_name = pending.full_name
-            driver.user.save()
-        
-        fields_to_update = ['user_photo', 'gender', 'nid_front', 'nid_back', 
-                            'license_front', 'license_back', 'vehicle_type', 
-                            'vehicle_brand', 'vehicle_model', 'registration_photo']
-        
-        for field in fields_to_update:
-            new_value = getattr(pending, field)
-            if new_value: # Only update if the field was changed in the pending request
-                setattr(driver, field, new_value)
-        
-        driver.admin_verified = True
-        driver.save()
-        pending.delete()
