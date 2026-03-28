@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User,RiderProfile,DriverProfile,VehicleImage
+from .models import User,RiderProfile,DriverProfile,VehicleImage,PendingDriverUpdate
 
 class UserBaseSerializer(serializers.ModelSerializer):
     
@@ -123,3 +123,12 @@ class DriverProfileUpdateSerializer(serializers.ModelSerializer):
         instance.user_photo = validated_data.get('user_photo', instance.user_photo)
         instance.save()
         return instance
+
+class DriverPendingUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PendingDriverUpdate
+        fields = [
+            'full_name', 'user_photo', 'gender', 'nid_front', 'nid_back', 
+            'license_front', 'license_back', 'vehicle_type', 
+            'vehicle_brand', 'vehicle_model', 'registration_photo'
+        ]
