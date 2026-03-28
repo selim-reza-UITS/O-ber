@@ -48,7 +48,6 @@ rider_pattern = [
 driver_pattern = [
     path("accounts/profile/update/",accounts_profile.UserProfileUpdateView.as_view(),name="driver_profile_update"),
     path("driver-onboarding/",driver_accounts.DriverOnboardingView.as_view(),name="onboarding"),
-    path("verify-KYC/",driver_accounts.DriverSelfieVerifyView.as_view(),name="match-selfie"),
     path("location-update/",drivers.UpdateDriverLocationView.as_view(),name="location_update"),
     path("available-for-rides/",drivers.AvailableRidesView.as_view(),name="check all available rider list"),
     path("accept-ride/<int:ride_id>/",drivers.AcceptRideView.as_view(),name="accept_riders"),
