@@ -4,6 +4,7 @@ from .models import TermsAndConditionsModel, PrivacyAndPolicyModel, AboutUs, Hel
 from src.apps.accounts.models import User, DriverProfile, PendingDriverUpdate
 from src.apps.riders.models import Ride
 from src.apps.payments.models import Transaction
+from src.apps.accounts.serializers_driver import VehicleImageSerializer
 
 class TermsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -183,10 +184,11 @@ class AdminDriverListSerializer(serializers.ModelSerializer):
     phone_number = serializers.ReadOnlyField(source='user.phone_number')
     profile_picture = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
+    vehicle_photos = VehicleImageSerializer(many=True, read_only=True)
     
     class Meta:
         model = DriverProfile
-        fields = ['user_id', 'full_name', 'email', 'phone_number', 'profile_picture', 'status', 'is_rejected', 'created_at']
+        fields = ['user_id', 'full_name', 'email', 'phone_number', 'profile_picture', 'status', 'is_rejected', 'created_at', 'vehicle_type', 'vehicle_plate', 'vehicle_photos']
     
     def get_profile_picture(self, obj):
         if obj.user_photo:
@@ -216,6 +218,7 @@ class DriverDetailSerializer(serializers.ModelSerializer):
     profile_picture = serializers.SerializerMethodField()
     driver_ratings = serializers.SerializerMethodField(read_only=True)
     driver_total_trip_count = serializers.SerializerMethodField(read_only=True)
+    vehicle_photos = VehicleImageSerializer(many=True, read_only=True)
     
     class Meta:
         model = DriverProfile
@@ -224,7 +227,7 @@ class DriverDetailSerializer(serializers.ModelSerializer):
             'date_of_birth', 'gender', 'nid_number', 'driver_license_number',
             'nid_front', 'nid_back', 'license_front', 'license_back',
             'vehicle_type', 'vehicle_brand', 'vehicle_model', 'vehicle_plate', 'registration_photo',
-            'ai_verified', 'admin_verified', 'is_rejected', 'created_at'
+            'ai_verified', 'admin_verified', 'is_rejected', 'created_at', 'vehicle_photos'
         ]
     
     def get_profile_picture(self, obj):
