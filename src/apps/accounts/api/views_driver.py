@@ -12,7 +12,7 @@ def verify_image_ai(selfie_file, document_file):
     """
     Sends images to the FastAPI service for identity verification.
     """
-    print("django called me!!!")
+    print("Initiating requests.post to KYC Service...")
     url = os.getenv("KYC_SERVICE_URL", "http://kyc_service:8000/verify-identity/")
     
     try:
@@ -24,15 +24,19 @@ def verify_image_ai(selfie_file, document_file):
         }
         
         response = requests.post(url, files=files, timeout=90)
+        print(f"KYC Service replied with HTTP Status: {response.status_code}")
         
         if response.status_code == 200:
             result = response.json()
+            print(f"KYC Service JSON Payload: {result}")
             return result.get("is_match", False)
+        else:
+            print(f"KYC Service Text Payload: {response.text}")
         return False
     except Exception as e:
-        print(f"AI Verification Error: {e}")
+        print(f"AI Verification Error Connection Failed: {e}")
         return False
-    
+
 class DriverOnboardingView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
