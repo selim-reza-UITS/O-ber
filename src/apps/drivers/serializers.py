@@ -9,9 +9,8 @@ class DriverDashboardSerializer(serializers.ModelSerializer):
     total_rides = serializers.SerializerMethodField()
     this_week_rides = serializers.SerializerMethodField()
     active_hours_30_days = serializers.SerializerMethodField()
-    vehicle_photos = serializers.SlugRelatedField(
-        many=True, read_only=True, slug_field='image'
-    )
+    user_photo = serializers.SerializerMethodField()
+    vehicle_photos = serializers.SerializerMethodField()
 
     class Meta:
         model = DriverProfile
@@ -40,3 +39,22 @@ class DriverDashboardSerializer(serializers.ModelSerializer):
         shifts = obj.shifts.filter(start_time__gte=last_30_days, end_time__isnull=False)
         total_duration = sum([s.duration for s in shifts], timedelta())
         return f"{int(total_duration.total_seconds() // 3600)}hrs"
+
+    def get_user_photo(self, obj):
+        request = self.context.get('request')
+        if obj.user_photo:
+            if request:
+                return request.build_absolute_uri(obj.user_photo.url)
+            return f"https://api.rydeislands.com{obj.user_photo.url}"
+        return None
+
+    def get_vehicle_photos(self, obj):
+        request = self.context.get('request')
+        photos = []
+        for photo_obj in obj.vehicle_photos.all():
+            if photo_obj.image:
+                if request:
+                    photos.append(request.build_absolute_uri(photo_obj.image.url))
+                else:
+                    photos.append(f"https://api.rydeislands.com{photo_obj.image.url}")
+        return photos
