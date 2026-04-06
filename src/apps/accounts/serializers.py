@@ -24,26 +24,24 @@ class SignUpSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'password': {'write_only': True}
         }
-    def validate_phone_number(self, value):
-        """
-        Validates Aruba (+297) phone numbers
-        """
-        if not value:
-            return None
-        try:
-            parsed_number = phonenumbers.parse(value, "AW")
+    # def validate_phone_number(self, value):
+    #     """
+    #     Validates any international phone number
+    #     """
+    #     if not value:
+    #         return None
+    #     try:
+    #         # Parse number (requires country code like +1, +44, etc if no default region is set)
+    #         parsed_number = phonenumbers.parse(value, None)
             
-            if not phonenumbers.is_valid_number(parsed_number):
-                raise serializers.ValidationError("Invalid Aruba phone number.")
+    #         if not phonenumbers.is_valid_number(parsed_number):
+    #             raise serializers.ValidationError("Invalid phone number.")
             
-            if phonenumbers.region_code_for_number(parsed_number) != "AW":
-                raise serializers.ValidationError("Only Aruba (+297) phone numbers are allowed.")
-
-            # Return the standardized international format (+297xxxxxxx)
-            return phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
+    #         # Return the standardized international format
+    #         return phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
             
-        except phonenumbers.phonenumberutil.NumberParseException:
-            raise serializers.ValidationError("Invalid phone format. Please enter a valid number.")
+    #     except phonenumbers.phonenumberutil.NumberParseException:
+    #         raise serializers.ValidationError("Invalid phone format. Please include your country code (e.g., +1).")
         
     def validate(self, attrs):
         if attrs['password'] != attrs['confirm_password']:
