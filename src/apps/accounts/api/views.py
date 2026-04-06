@@ -2,7 +2,8 @@ from rest_framework import status, views, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
-
+from pprint import pprint
+import json
 from rest_framework.permissions import AllowAny
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -27,7 +28,11 @@ class SignUpView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        print("\n--- INCOMING REQUEST ---")
+        pprint(request.data) # Safer than json.dumps
+
         serializer = SignUpSerializer(data=request.data)
+        
         if serializer.is_valid():
             with transaction.atomic():
                 user = User.objects.create_user(
@@ -40,11 +45,10 @@ class SignUpView(APIView):
                 
             tokens = get_tokens_for_user(user)
             
-            # Logic for initials (Selim Reza -> SR)
             names = user.full_name.split()
             initials = "".join([n[0].upper() for n in names[:2]])
 
-            return Response({
+            response_data = {
                 "message": "User created successfully",
                 "user": {
                     "id": user.user_id,
@@ -52,7 +56,16 @@ class SignUpView(APIView):
                     "is_rider": user.is_rider
                 },
                 "tokens": tokens
-            }, status=status.HTTP_201_CREATED)
+            }
+
+            print("\n--- SUCCESS RESPONSE ---")
+            pprint(response_data) # Safer than json.dumps
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+        
+        print("\n--- VALIDATION ERROR RESPONSE ---")
+        pprint(serializer.errors)
+        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(views.APIView):

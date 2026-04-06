@@ -50,7 +50,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CSRF_TRUSTED_ORIGINS = ["http://172.252.13.85:8888"]
+CSRF_TRUSTED_ORIGINS = ["http://172.252.13.85:8888","https://api.rydeislands.com"]
 
 # Trust X-Forwarded-* headers from nginx proxy
 USE_X_FORWARDED_HOST = True
