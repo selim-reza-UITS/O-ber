@@ -66,7 +66,13 @@ class SignUpView(APIView):
         print("\n--- VALIDATION ERROR RESPONSE ---")
         pprint(serializer.errors)
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Flatten array errors into single strings
+        errors = {
+            key: value[0] if isinstance(value, list) and len(value) > 0 else str(value)
+            for key, value in serializer.errors.items()
+        }
+        
+        return Response(errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(views.APIView):
     permission_classes = [AllowAny]
