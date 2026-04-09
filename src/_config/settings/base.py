@@ -147,7 +147,7 @@ WHITENOISE_AUTOREFRESH = True
 WHITENOISE_USE_FINDERS = True
 
 # Media files
-MEDIA_URL = '/media/'
+MEDIA_URL = 'https://api.rydeislands.com/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
