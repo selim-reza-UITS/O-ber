@@ -17,5 +17,10 @@ class SignUpView(views.APIView):
         if serializer.is_valid():
             user = serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Flatten array errors into single strings
+        errors = {
+            key: value[0] if isinstance(value, list) and len(value) > 0 else str(value)
+            for key, value in serializer.errors.items()
+        }
+        return Response(errors, status=status.HTTP_400_BAD_REQUEST)
 
