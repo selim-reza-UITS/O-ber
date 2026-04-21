@@ -45,4 +45,6 @@ clean:
 
 test:
 	docker-compose exec backend python manage.py test
-	
+
+mock-users:
+	docker-compose exec backend python scripts/create_mock_users.py
