@@ -53,7 +53,8 @@ class SignUpView(APIView):
                 "user": {
                     "id": user.user_id,
                     "initials": initials,
-                    "is_rider": user.is_rider
+                    "is_rider": user.is_rider,
+                    "is_driver": False,
                 },
                 "tokens": tokens
             }
