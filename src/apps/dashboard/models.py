@@ -173,7 +173,7 @@ class Notification(models.Model):
 class Marketing(models.Model):
     title=models.CharField(max_length=255)
     description=models.TextField()
-    image=models.ImageField(upload_to='marketing_images/')
+    image=models.ImageField(upload_to='marketing_images/', blank=True, null=True)
     created_at=models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

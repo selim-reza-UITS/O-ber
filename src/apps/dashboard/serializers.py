@@ -350,9 +350,11 @@ class BlockSerilaizer(serializers.ModelSerializer):
 class MarketingSerializer(serializers.ModelSerializer):
 
     image_url = serializers.SerializerMethodField()
+    image = serializers.ImageField(write_only=True, required=False)
+
     class Meta:
         model = Marketing
-        fields = ['id', 'title', 'description', 'image_url', 'created_at']
+        fields = ['id', 'title', 'description', 'image', 'image_url', 'created_at']
         read_only_fields = ['id', 'created_at']
 
     def get_image_url(self, obj):

@@ -41,7 +41,7 @@ class UpdateDriverLocationView(APIView):
             active_ride = Ride.objects.filter(
                 driver=request.user, 
                 status__in=['ACCEPTED', 'ARRIVED', 'STARTED']
-            ).first()
+            ).order_by('-id').first()
             
             if active_ride:
                 # We broadcast the update so the Rider's map shows the car moving
