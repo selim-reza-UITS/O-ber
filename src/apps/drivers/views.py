@@ -23,11 +23,11 @@ class UpdateDriverLocationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        lat = request.data.get('lat')
-        lng = request.data.get('lng')
-        
+        lat = request.data.get('latitude') or request.data.get('lat')
+        lng = request.data.get('longitude') or request.data.get('lng')
+
         if lat is None or lng is None:
-            return Response({"error": "Coordinates (lat, lng) required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Coordinates (latitude, longitude) required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # 1. Update Driver's DB Profile
