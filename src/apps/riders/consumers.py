@@ -33,12 +33,21 @@ class TripTrackingConsumer(AsyncWebsocketConsumer):
 
 class RideChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        # 1. JWT Authentication (Your header logic)
+        # 1. JWT Authentication — try query param first (browsers can't send
+        #    custom headers on WebSocket), then fall back to Authorization header.
         token = None
-        for header in self.scope.get("headers", []):
-            if header[0] == b"authorization":
-                token = header[1].decode().split(" ")[-1]
-                break
+
+        query_string = self.scope.get("query_string", b"").decode()
+        query_params = parse_qs(query_string)
+        token_list = query_params.get("token", [])
+        if token_list:
+            token = token_list[0]
+
+        if not token:
+            for header in self.scope.get("headers", []):
+                if header[0] == b"authorization":
+                    token = header[1].decode().split(" ")[-1]
+                    break
 
         if not token:
             await self.close()
@@ -94,7 +103,7 @@ class RideChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_ride(self, ride_id):
         try:
-            return Ride.objects.get(id=ride_id)
+            return Ride.objects.select_related('rider', 'driver').get(id=ride_id)
         except Ride.DoesNotExist:
             return None
 
