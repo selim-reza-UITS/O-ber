@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db.models import Avg
-from .models import TermsAndConditionsModel, PrivacyAndPolicyModel, AboutUs, HelpSupport, PriceConfig, Notification, Commision
+from .models import Marketing, TermsAndConditionsModel, PrivacyAndPolicyModel, AboutUs, HelpSupport, PriceConfig, Notification, Commision
 from src.apps.accounts.models import User, DriverProfile, PendingDriverUpdate
 from src.apps.riders.models import Ride
 from src.apps.payments.models import Transaction
@@ -346,3 +346,19 @@ class BlockSerilaizer(serializers.ModelSerializer):
         model = User
         fields = ['user_id', 'full_name', 'email', 'phone_number', 'is_blocked', 'is_blocked_status', 'is_active']
         read_only_fields = ['user_id', 'full_name', 'email', 'phone_number', 'is_active']
+
+class MarketingSerializer(serializers.ModelSerializer):
+
+    image_url = serializers.SerializerMethodField()
+    class Meta:
+        model = Marketing
+        fields = ['id', 'title', 'description', 'image_url', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image and request:
+            return request.build_absolute_uri(obj.image.url)
+        elif obj.image:
+            return obj.image.url
+        return None

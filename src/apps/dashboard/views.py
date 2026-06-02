@@ -5,9 +5,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions, generics
 from rest_framework.pagination import PageNumberPagination
-from .models import TermsAndConditionsModel, PrivacyAndPolicyModel, AboutUs, HelpSupport, PriceConfig, Notification, Commision
+from .models import Marketing, TermsAndConditionsModel, PrivacyAndPolicyModel, AboutUs, HelpSupport, PriceConfig, Notification, Commision
 from .serializers import (
-    TermsSerializer, PrivacySerializer, AboutUsSerializer, HelpSupportSerializer, 
+    MarketingSerializer, TermsSerializer, PrivacySerializer, AboutUsSerializer, HelpSupportSerializer, 
     PriceConfigSerializer, NotificationSerializer, AdminUserListSerializer, 
     AdminTransactionSerializer, AdminRideListSerializer, AdminProfileSerializer,
     AdminPasswordUpdateSerializer, AdminDriverListSerializer, DriverDetailSerializer, AdminRideDetailSerializer, CashWithdrawSerializer, CommisionSerializer, BlockSerilaizer
@@ -604,3 +604,24 @@ class CommisionDetailsandDeleteView(generics.RetrieveUpdateDestroyAPIView):
     
     def perform_update(self, serializer):
         serializer.save()
+
+
+
+class MarketingListCreateView(generics.ListCreateAPIView):
+    queryset = Marketing.objects.all().order_by('-created_at')
+    serializer_class = MarketingSerializer
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [permissions.AllowAny()]
+        return [permissions.IsAdminUser()]
+
+class MarketingDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Marketing.objects.all()
+    serializer_class = MarketingSerializer
+    lookup_field = 'pk'
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [permissions.AllowAny()]
+        return [permissions.IsAdminUser()]
