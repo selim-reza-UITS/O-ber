@@ -63,6 +63,8 @@ dashboard_patterns = [
     path("privacy-and-policy/",dashboard.PrivacyView.as_view(),name="privacy-and-policy"),
     path("about-us/",dashboard.AboutUsView.as_view(),name="aboutUs"),
     path("help-and-support/",dashboard.HelpSupportView.as_view(),name="helpAndSupport"),
+    path("marketing/", dashboard.MarketingListCreateView.as_view(), name="marketing-list-create"),
+    path("marketing/<int:pk>/", dashboard.MarketingDetailView.as_view(), name="marketing-detail"),
     
     # Admin API
     path("admin/stats/", dashboard.AdminDashboardStatsView.as_view(), name="admin_stats"),
