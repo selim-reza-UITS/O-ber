@@ -6,7 +6,7 @@ from django.utils import timezone
 
 class DriverDashboardSerializer(serializers.ModelSerializer):
     rating = serializers.SerializerMethodField()
-    total_rides = serializers.SerializerMethodField()
+    total_trips = serializers.SerializerMethodField()
     this_week_rides = serializers.SerializerMethodField()
     active_hours_30_days = serializers.SerializerMethodField()
     user_photo = serializers.SerializerMethodField()
@@ -15,7 +15,7 @@ class DriverDashboardSerializer(serializers.ModelSerializer):
     class Meta:
         model = DriverProfile
         fields = [
-            'rating', 'total_rides', 'this_week_rides', 'active_hours_30_days',
+            'rating', 'total_trips', 'this_week_rides', 'active_hours_30_days',
             'user_photo', 'vehicle_type', 'vehicle_brand', 'vehicle_model', 
             'vehicle_plate', 'is_online', 'is_active', 'vehicle_photos'
         ]
@@ -24,7 +24,7 @@ class DriverDashboardSerializer(serializers.ModelSerializer):
         avg = obj.user.reviews_received.aggregate(Avg('rating'))['rating__avg']
         return round(avg, 1) if avg else 0.0
 
-    def get_total_rides(self, obj):
+    def get_total_trips(self, obj):
         return obj.user.rides_as_driver.filter(status='COMPLETED').count()
 
     def get_this_week_rides(self, obj):

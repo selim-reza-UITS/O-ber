@@ -106,12 +106,27 @@ class AcceptRideView(APIView):
             ride.driver = request.user
             ride.status = 'ACCEPTED'
             ride.save()
+            from django.db.models import Avg
+            driver_profile = request.user.driver_profile
+            avg_rating = request.user.reviews_received.aggregate(Avg('rating'))['rating__avg']
+            rating = round(float(avg_rating), 1) if avg_rating else 0.0
+            total_trips = request.user.rides_as_driver.filter(status='COMPLETED').count()
+            vehicle_name = f"{driver_profile.vehicle_brand} {driver_profile.vehicle_model}"
+            first_photo = driver_profile.vehicle_photos.first()
+            vehicle_photo = (
+                request.build_absolute_uri(first_photo.image.url)
+                if first_photo and first_photo.image else None
+            )
             broadcast_ride_update(ride.id, {
                 "type": "DRIVER_ACCEPTED",
                 "status": "ACCEPTED",
                 "driver_name": request.user.full_name,
                 "driver_phone": request.user.phone_number,
-                "vehicle": f"{request.user.driver_profile.vehicle_brand} {request.user.driver_profile.vehicle_model}"
+                "vehicle": vehicle_name,
+                "rating": rating,
+                "total_trips": total_trips,
+                "vehicle_name": vehicle_name,
+                "vehicle_photo": vehicle_photo,
             })
             return Response({
                 "message": "Ride accepted successfully",
