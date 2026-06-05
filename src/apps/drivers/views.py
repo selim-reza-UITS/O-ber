@@ -126,6 +126,7 @@ class AcceptRideView(APIView):
                 "rating": rating,
                 "total_trips": total_trips,
                 "vehicle_name": vehicle_name,
+                    "vehicle_number": driver_profile.vehicle_plate,
                 "vehicle_photo": vehicle_photo,
             })
             return Response({
@@ -147,7 +148,7 @@ class DriverProfileDashboardView(APIView):
         except DriverProfile.DoesNotExist:
             return Response({"error": "Driver profile not found"}, status=404)
 
-        serializer = DriverDashboardSerializer(profile)
+        serializer = DriverDashboardSerializer(profile, context={"request": request})
         
         response_data = {
             "full_name": request.user.full_name,

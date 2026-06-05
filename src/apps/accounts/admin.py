@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User,DriverProfile, PendingDriverUpdate
+from .models import User, DriverProfile, PendingDriverUpdate, VehicleImage
 # Register your models here.
 admin.site.register(User)
 
@@ -19,3 +19,4 @@ class DriverProfileAdmin(admin.ModelAdmin):
 
 
 admin.site.register(PendingDriverUpdate)
+admin.site.register(VehicleImage)

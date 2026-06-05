@@ -5,6 +5,7 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.measure import D
 from django.contrib.gis.geos import Point
 from decimal import Decimal
+from math import ceil
 from django.shortcuts import get_object_or_404
 
 from .models import Ride, RideReview
@@ -96,6 +97,25 @@ class CreateRideView(APIView):
 
             channel_layer = get_channel_layer()
             ride_data = RideSerializer(ride).data
+            total_distance = round(ride.pickup_location.distance(ride.dropoff_location) * 111.32, 2)
+            eta_minutes = max(1, ceil((total_distance / 40) * 60))
+            ride_data["distance"] = total_distance
+            ride_data["estimated_time"] = eta_minutes
+            ride_data["total_distance"] = total_distance
+            ride_data["total_price"] = str(ride.estimated_price)
+            ride_data["eta"] = eta_minutes
+            rider_photo = None
+            if hasattr(request.user, 'rider_profile') and request.user.rider_profile.user_photo:
+                rider_photo = request.build_absolute_uri(request.user.rider_profile.user_photo.url)
+
+            rider_details = {
+                "user_id": request.user.user_id,
+                "full_name": request.user.full_name,
+                "email": request.user.email,
+                "phone_number": request.user.phone_number,
+                "user_photo": rider_photo,
+            }
+            ride_data["rider_details"] = rider_details
             
             async_to_sync(channel_layer.group_send)(
                 "drivers_discovery",

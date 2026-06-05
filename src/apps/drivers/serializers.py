@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from django.db.models import Avg, Sum
+from django.db.models import Avg, Sum, F, DecimalField
+from django.db.models.functions import Coalesce
 from src.apps.accounts.models import DriverProfile
 from datetime import timedelta
 from django.utils import timezone
@@ -7,6 +8,7 @@ from django.utils import timezone
 class DriverDashboardSerializer(serializers.ModelSerializer):
     rating = serializers.SerializerMethodField()
     total_trips = serializers.SerializerMethodField()
+    total_earning = serializers.SerializerMethodField()
     this_week_rides = serializers.SerializerMethodField()
     active_hours_30_days = serializers.SerializerMethodField()
     user_photo = serializers.SerializerMethodField()
@@ -15,7 +17,7 @@ class DriverDashboardSerializer(serializers.ModelSerializer):
     class Meta:
         model = DriverProfile
         fields = [
-            'rating', 'total_trips', 'this_week_rides', 'active_hours_30_days',
+            'rating', 'total_trips', 'total_earning', 'this_week_rides', 'active_hours_30_days',
             'user_photo', 'vehicle_type', 'vehicle_brand', 'vehicle_model', 
             'vehicle_plate', 'is_online', 'is_active', 'vehicle_photos'
         ]
@@ -26,6 +28,12 @@ class DriverDashboardSerializer(serializers.ModelSerializer):
 
     def get_total_trips(self, obj):
         return obj.user.rides_as_driver.filter(status='COMPLETED').count()
+
+    def get_total_earning(self, obj):
+        total = obj.user.rides_as_driver.filter(status='COMPLETED').aggregate(
+            total=Sum(Coalesce('final_price', 'estimated_price', output_field=DecimalField()))
+        )['total']
+        return round(float(total), 2) if total else 0.0
 
     def get_this_week_rides(self, obj):
         last_7_days = timezone.now() - timedelta(days=7)
@@ -40,21 +48,26 @@ class DriverDashboardSerializer(serializers.ModelSerializer):
         total_duration = sum([s.duration for s in shifts], timedelta())
         return f"{int(total_duration.total_seconds() // 3600)}hrs"
 
-    def get_user_photo(self, obj):
+    def _build_media_url(self, file_field):
+        if not file_field:
+            return None
+
+        file_url = file_field.url
+        if file_url.startswith('http://') or file_url.startswith('https://'):
+            return file_url
+
         request = self.context.get('request')
-        if obj.user_photo:
-            if request:
-                return request.build_absolute_uri(obj.user_photo.url)
-            return f"https://api.rydeislands.com{obj.user_photo.url}"
-        return None
+        if request:
+            return request.build_absolute_uri(file_url)
+
+        return f"https://api.rydeislands.com{file_url}"
+
+    def get_user_photo(self, obj):
+        return self._build_media_url(obj.user_photo)
 
     def get_vehicle_photos(self, obj):
-        request = self.context.get('request')
         photos = []
         for photo_obj in obj.vehicle_photos.all():
             if photo_obj.image:
-                if request:
-                    photos.append(request.build_absolute_uri(photo_obj.image.url))
-                else:
-                    photos.append(f"https://api.rydeislands.com{photo_obj.image.url}")
+                photos.append(self._build_media_url(photo_obj.image))
         return photos
