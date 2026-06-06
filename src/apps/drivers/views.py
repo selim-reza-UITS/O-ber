@@ -107,6 +107,7 @@ class AcceptRideView(APIView):
             ride.status = 'ACCEPTED'
             ride.save()
             from django.db.models import Avg
+            from math import ceil
             driver_profile = request.user.driver_profile
             avg_rating = request.user.reviews_received.aggregate(Avg('rating'))['rating__avg']
             rating = round(float(avg_rating), 1) if avg_rating else 0.0
@@ -117,17 +118,46 @@ class AcceptRideView(APIView):
                 request.build_absolute_uri(first_photo.image.url)
                 if first_photo and first_photo.image else None
             )
+
+            # ETA and distance from driver's current location to rider's pickup
+            if driver_profile.last_location and ride.pickup_location:
+                distance_to_rider = round(
+                    driver_profile.last_location.distance(ride.pickup_location) * 111.32, 2
+                )
+                eta_to_rider = max(1, ceil((distance_to_rider / 40) * 60))
+            else:
+                distance_to_rider = None
+                eta_to_rider = None
+
             broadcast_ride_update(ride.id, {
                 "type": "DRIVER_ACCEPTED",
                 "status": "ACCEPTED",
                 "driver_name": request.user.full_name,
                 "driver_phone": request.user.phone_number,
+                'driver_image': request.build_absolute_uri(driver_profile.user_photo.url) if driver_profile.user_photo else None,
                 "vehicle": vehicle_name,
                 "rating": rating,
                 "total_trips": total_trips,
                 "vehicle_name": vehicle_name,
-                    "vehicle_number": driver_profile.vehicle_plate,
+                "vehicle_number": driver_profile.vehicle_plate,
                 "vehicle_photo": vehicle_photo,
+
+                "ride_details":{
+                    "pickup_location": {
+                        "lat": ride.pickup_location.y,
+                        "lng": ride.pickup_location.x
+                    },
+                    "dropoff_location": {
+                        "lat": ride.dropoff_location.y,
+                        "lng": ride.dropoff_location.x
+                    },
+                    "estimated_price": str(ride.estimated_price),
+                    "rider_name": ride.rider.full_name,
+                    "rider_phone": ride.rider.phone_number,
+                    'rider_image': request.build_absolute_uri(ride.rider.rider_profile.user_photo.url) if hasattr(ride.rider, 'rider_profile') and ride.rider.rider_profile.user_photo else None,
+                    "eta_to_rider": eta_to_rider,
+                    "distance_to_rider": distance_to_rider,
+                }
             })
             return Response({
                 "message": "Ride accepted successfully",

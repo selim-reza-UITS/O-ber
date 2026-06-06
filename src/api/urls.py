@@ -37,10 +37,6 @@ rider_pattern = [
     path("ride/<int:ride_id>/",riders.RideDetailView.as_view(),name="ride_detail"),
     path("ride/<int:ride_id>/cancel/",riders.CancelRideView.as_view(),name="cancel_ride"),
     path("ride/<int:ride_id>/review/",riders.RideReviewView.as_view(),name="review_ride"),
-    # Payment
-    path("payment/config/", payments.StripeConfigView.as_view(), name="stripe-config"),
-    path("payment/sheet/", payments.PaymentSheetView.as_view(), name="payment-sheet"),
-    path("payment/webhook/", payments.StripeWebhookView.as_view(), name="stripe-webhook"),
 ]
 
 # rider_websocket_pattern = []
@@ -100,10 +96,18 @@ dashboard_patterns = [
     path("commision/details/and/delete/<int:pk>/", dashboard.CommisionDetailsandDeleteView.as_view(), name="commision_detail_delete"),
 ]
 
+payment_patterns = [
+    path("config/", payments.StripeConfigView.as_view(), name="stripe-config"),
+    path("sheet/", payments.PaymentSheetView.as_view(), name="payment-sheet"),
+    path("webhook/", payments.StripeWebhookView.as_view(), name="stripe-webhook"),
+    path("ride/<int:ride_id>/pay/", payments.RidePaymentView.as_view(), name="ride-pay"),
+]
+
 urlpatterns = [
     path("auth/",include(auth_patterns)),
     path("password/management/",include(password_management)),
     path("rider/",include(rider_pattern)),
     path("drivers/",include(driver_pattern)),
+    path("payment/",include(payment_patterns)),
     path("platform/",include(dashboard_patterns)),
 ]

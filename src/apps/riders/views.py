@@ -200,11 +200,15 @@ class RideReviewView(APIView):
              
         if hasattr(ride, 'review'):
             return Response({"error": "Already reviewed"}, status=400)
-             
+        
         rating = request.data.get('rating')
         comment = request.data.get('comment', '')
         
-        RideReview.objects.create(
+        # Validate rating
+        if not rating or not isinstance(rating, int) or rating < 1 or rating > 5:
+            return Response({"error": "Rating must be an integer between 1 and 5"}, status=400)
+        
+        review = RideReview.objects.create(
             ride=ride,
             rider=request.user,
             driver=ride.driver,
@@ -212,4 +216,22 @@ class RideReviewView(APIView):
             comment=comment
         )
         
-        return Response({"message": "Review submitted"})
+        # Notify driver via websocket
+        broadcast_ride_update(ride.id, {
+            "type": "DRIVER_REVIEWED",
+            "rating": rating,
+            "comment": comment,
+            "reviewer": request.user.full_name,
+        })
+        
+        return Response({
+            "message": "Review submitted successfully",
+            "review": {
+                "id": review.id,
+                "ride_id": ride.id,
+                "rating": review.rating,
+                "comment": review.comment,
+                "created_at": review.created_at,
+                "reviewer": request.user.full_name,
+            }
+        }, status=201)

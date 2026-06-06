@@ -164,6 +164,7 @@ class DriverDiscoveryConsumer(AsyncWebsocketConsumer):
     async def new_ride_available(self, event):
         """ 
         This is triggered by the CreateRideView. 
+        
         It sends the ride details only to drivers in the matching vehicle group.
         """
         await self.send(text_data=json.dumps({
