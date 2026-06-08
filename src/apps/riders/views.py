@@ -47,13 +47,16 @@ class FareEstimateView(APIView):
                 vehicle_type=v_type,
                 last_location__distance_lte=(pickup_point, D(km=10))
             ).count()
+            
+            # Calculate ETA based on distance: (distance_km / 40 km/h) * 60 min/h
+            eta_minutes = max(1, ceil((distance_km / 40) * 60)) if available_drivers > 0 else None
 
             estimates.append({
                 "vehicle_type": v_type,
                 "estimated_price": str(price),
                 "currency": "AWG",
                 "available_drivers": available_drivers,
-                "eta_minutes": 5 if available_drivers > 0 else None
+                "eta_minutes": eta_minutes
             })
 
         return Response({
