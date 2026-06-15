@@ -7,7 +7,7 @@ from django.contrib.gis.geos import Point
 from decimal import Decimal
 from math import ceil
 from django.shortcuts import get_object_or_404
-
+from django.conf import settings
 from .models import Ride, RideReview
 from .serializers import RideSerializer
 from src.apps.accounts.models import DriverProfile
@@ -90,10 +90,13 @@ class CreateRideView(APIView):
                 status='SEARCHING'
             )
             
+            radius_km = getattr(settings, "RIDE_DISCOVERY_RADIUS_KM", 5)
+
             nearby_drivers = DriverProfile.objects.filter(
                 is_active=True,
                 is_online=True,
-                last_location__distance_lte=(ride.pickup_location, D(km=5))
+                vehicle_type=v_type,  # only matching vehicle type
+                last_location__distance_lte=(ride.pickup_location, D(km=radius_km))
             ).annotate(
                 distance=Distance('last_location', ride.pickup_location)
             ).order_by('distance')
@@ -119,24 +122,24 @@ class CreateRideView(APIView):
                 "user_photo": rider_photo,
             }
             ride_data["rider_details"] = rider_details
-            
-            async_to_sync(channel_layer.group_send)(
-                "drivers_discovery",
-                {
-                    "type": "new_ride_available",
-                    "data": {
-                        "event": "NEW_RIDE_AVAILABLE",
-                        "ride": ride_data,
+
+            # Push the request ONLY to drivers within the radius, one personal group at a time
+            for driver in nearby_drivers:
+                async_to_sync(channel_layer.group_send)(
+                    f"driver_{driver.user_id}",
+                    {
+                        "type": "new_ride_available",
+                        "data": {
+                            "event": "NEW_RIDE_AVAILABLE",
+                            "ride": ride_data,
+                        }
                     }
-                }
-            )
+                )
 
             response_data = ride_data
             response_data['nearby_drivers_count'] = nearby_drivers.count()
-            
+
             return Response(response_data, status=status.HTTP_201_CREATED)
-            
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class RideHistoryView(APIView):

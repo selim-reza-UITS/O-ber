@@ -117,23 +117,53 @@ class RideChatConsumer(AsyncWebsocketConsumer):
     
 class DriverDiscoveryConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        # 1. Get vehicle type from the URL: ws://.../?vehicle_type=XL
+        # 1. JWT Authentication — same pattern as RideChatConsumer.
+        #    Try ?token= query param first (browsers can't send custom WS headers),
+        #    then fall back to the Authorization header.
+        token = None
+
         query_string = self.scope.get("query_string", b"").decode("utf-8")
         query_params = parse_qs(query_string)
-        
-        # Default to ECONOMY if not provided
+
+        token_list = query_params.get("token", [])
+        if token_list:
+            token = token_list[0]
+
+        if not token:
+            for header in self.scope.get("headers", []):
+                if header[0] == b"authorization":
+                    token = header[1].decode().split(" ")[-1]
+                    break
+
+        if not token:
+            await self.close()
+            return
+
+        try:
+            validated = UntypedToken(token)
+            user_id = validated.payload.get("user_id")
+            self.user = await database_sync_to_async(User.objects.get)(user_id=user_id)
+        except (InvalidToken, TokenError, User.DoesNotExist):
+            await self.close()
+            return
+
+        # 2. Get vehicle type from the URL: ws://.../?vehicle_type=XL&token=...
+        #    Default to ECONOMY if not provided
         self.vehicle_type = query_params.get("vehicle_type", ["ECONOMY"])[0].upper()
-        
-        # 2. Define group names
+
+        # 3. Define group names
         self.general_group = "drivers_discovery"
         self.type_group = f"drivers_{self.vehicle_type}"
+        # Personal group so the server can target THIS driver only (geofenced ride pushes)
+        self.personal_group = f"driver_{self.user.user_id}"
 
-        # 3. Join BOTH groups (General for broadcasts, Type-specific for ride requests)
+        # 4. Join groups
         await self.channel_layer.group_add(self.general_group, self.channel_name)
         await self.channel_layer.group_add(self.type_group, self.channel_name)
+        await self.channel_layer.group_add(self.personal_group, self.channel_name)
 
         await self.accept()
-        
+
         # Confirm connection to the driver
         await self.send(text_data=json.dumps({
             "status": "Connected",
@@ -141,9 +171,13 @@ class DriverDiscoveryConsumer(AsyncWebsocketConsumer):
         }))
 
     async def disconnect(self, close_code):
-        # Leave groups on disconnect
-        await self.channel_layer.group_discard(self.general_group, self.channel_name)
-        await self.channel_layer.group_discard(self.type_group, self.channel_name)
+        # Leave groups on disconnect (guard against close before groups were set)
+        if hasattr(self, "general_group"):
+            await self.channel_layer.group_discard(self.general_group, self.channel_name)
+        if hasattr(self, "type_group"):
+            await self.channel_layer.group_discard(self.type_group, self.channel_name)
+        if hasattr(self, "personal_group"):
+            await self.channel_layer.group_discard(self.personal_group, self.channel_name)
 
     async def receive(self, text_data):
         """ Handles messages sent FROM the driver (like location updates) """

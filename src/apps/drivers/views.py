@@ -8,7 +8,7 @@ from src.apps.riders.serializers import RideSerializer
 from src.apps.drivers.utils import broadcast_ride_update
 from src.apps.riders.tasks import task_broadcast_location
 from django.db import transaction
-
+from django.conf import settings
 from src.apps.accounts.permissions import IsDriver, IsVerifiedDriver
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -101,6 +101,20 @@ class AcceptRideView(APIView):
 
             if ride.status != 'SEARCHING':
                 return Response({"error": "Ride already taken or cancelled"}, status=400)
+
+            # --- Geofence guard: driver must be within the allowed radius of the pickup ---
+            driver_profile = request.user.driver_profile
+            if not driver_profile.last_location:
+                return Response({"error": "Update your location first"}, status=400)
+
+            radius_km = getattr(settings, "RIDE_DISCOVERY_RADIUS_KM", 5)
+            distance_to_pickup_km = driver_profile.last_location.distance(ride.pickup_location) * 111.32
+            if distance_to_pickup_km > radius_km:
+                return Response(
+                    {"error": "You are too far from the pickup location to accept this ride."},
+                    status=403
+                )
+            # -----------------------------------------------------------------------------
 
             # Assign driver and change status
             ride.driver = request.user
