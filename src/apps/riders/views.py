@@ -1,22 +1,24 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status, permissions
-from django.contrib.gis.db.models.functions import Distance
-from django.contrib.gis.measure import D
-from django.contrib.gis.geos import Point
 from decimal import Decimal
 from math import ceil
-from django.shortcuts import get_object_or_404
+
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.conf import settings
-from .models import Ride, RideReview
-from .serializers import RideSerializer
+from django.contrib.gis.db.models.functions import Distance
+from django.contrib.gis.geos import Point
+from django.contrib.gis.measure import D
+from django.shortcuts import get_object_or_404
+from rest_framework import permissions, status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
 from src.apps.accounts.models import DriverProfile
 from src.apps.accounts.permissions import IsRider
-from .utils import calculate_dynamic_fare
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
 from src.apps.drivers.utils import broadcast_ride_update
 
+from .models import Ride, RideReview
+from .serializers import RideSerializer
+from .utils import calculate_dynamic_fare
 
 class FareEstimateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -36,34 +38,45 @@ class FareEstimateView(APIView):
         dropoff_point = Point(float(dropoff_lng), float(dropoff_lat), srid=4326)
         distance_km = round(pickup_point.distance(dropoff_point) * 111.32, 2)
 
-        vehicle_types = ['ECONOMY', 'XL', 'PREMIUM']
+        RADIUS_KM = 5
+
+        # Find which vehicle types actually have an online driver within 5km.
+        nearby_drivers = DriverProfile.objects.filter(
+            is_active=True,
+            is_online=True,
+            last_location__isnull=False,
+            last_location__distance_lte=(pickup_point, D(km=RADIUS_KM)),
+        )
+
+        # Count available drivers per normalized vehicle type.
+        type_counts = {}
+        for driver in nearby_drivers:
+            if not driver.vehicle_type:
+                continue
+            key = driver.vehicle_type.strip().upper()
+            type_counts[key] = type_counts.get(key, 0) + 1
+
         estimates = []
-
-        for v_type in vehicle_types:
+        for v_type, available_drivers in type_counts.items():
             price = calculate_dynamic_fare(pickup_point, dropoff_point, v_type)
-            available_drivers = DriverProfile.objects.filter(
-                is_active=True,
-                is_online=True,
-                vehicle_type=v_type,
-                last_location__distance_lte=(pickup_point, D(km=10))
-            ).count()
-            
-            # Calculate ETA based on distance: (distance_km / 40 km/h) * 60 min/h
-            eta_minutes = max(1, ceil((distance_km / 40) * 60)) if available_drivers > 0 else None
-
+            eta_minutes = max(1, ceil((distance_km / 40) * 60))
             estimates.append({
                 "vehicle_type": v_type,
                 "estimated_price": str(price),
                 "currency": "AWG",
                 "available_drivers": available_drivers,
-                "eta_minutes": eta_minutes
+                "eta_minutes": eta_minutes,
             })
+
+        # Optional: sort so cheaper/expected tiers come first
+        tier_order = {"ECONOMY": 0, "XL": 1, "PREMIUM": 2}
+        estimates.sort(key=lambda e: tier_order.get(e["vehicle_type"], 99))
 
         return Response({
             "pickup_address": pickup_address,
             "dropoff_address": dropoff_address,
             "distance_km": distance_km,
-            "estimates": estimates
+            "estimates": estimates,
         })
 
 
@@ -78,7 +91,7 @@ class CreateRideView(APIView):
             p_lng = serializer.validated_data['pickup_lng']
             d_lat = serializer.validated_data['dropoff_lat']
             d_lng = serializer.validated_data['dropoff_lng']
-            
+
             pickup_p = Point(p_lng, p_lat, srid=4326)
             dropoff_p = Point(d_lng, d_lat, srid=4326)
             estimated_price = calculate_dynamic_fare(pickup_p, dropoff_p, v_type)
@@ -89,20 +102,33 @@ class CreateRideView(APIView):
                 estimated_price=estimated_price,
                 status='SEARCHING'
             )
-            
-            radius_km = getattr(settings, "RIDE_DISCOVERY_RADIUS_KM", 5)
 
+            radius_km = getattr(settings, "RIDE_DISCOVERY_RADIUS_KM", 5)
             nearby_drivers = DriverProfile.objects.filter(
-                is_active=True,
-                is_online=True,
-                vehicle_type=v_type,  # only matching vehicle type
-                last_location__distance_lte=(ride.pickup_location, D(km=radius_km))
+                is_online=True,            # actually toggled online
+                admin_verified=True,       # the real "approved driver" gate (is_active is admin-only and often unset)
+                last_location__isnull=False,
+                last_location__distance_lte=(ride.pickup_location, D(km=radius_km)),
+                # Optional vehicle-type match — case-insensitive so "Economy" matches "ECONOMY".
+                # Remove this line if your driver vehicle_type values don't map cleanly to requested types.
+                vehicle_type__iexact=v_type,
             ).annotate(
                 distance=Distance('last_location', ride.pickup_location)
             ).order_by('distance')
 
+            # --- TEMP DEBUG ---
+            print(
+                f"[DEBUG] Ride {ride.id} requested='{v_type}' "
+                f"pickup={ride.pickup_location.y},{ride.pickup_location.x} "
+                f"→ {nearby_drivers.count()} driver(s) within {radius_km}km",
+                flush=True,
+            )
+            # ------------------
+
             channel_layer = get_channel_layer()
             ride_data = RideSerializer(ride).data
+
+            # ---- enrich ride_data (this is the block you must NOT drop) ----
             total_distance = round(ride.pickup_location.distance(ride.dropoff_location) * 111.32, 2)
             eta_minutes = max(1, ceil((total_distance / 40) * 60))
             ride_data["distance"] = total_distance
@@ -110,6 +136,7 @@ class CreateRideView(APIView):
             ride_data["total_distance"] = total_distance
             ride_data["total_price"] = str(ride.estimated_price)
             ride_data["eta"] = eta_minutes
+
             rider_photo = None
             if hasattr(request.user, 'rider_profile') and request.user.rider_profile.user_photo:
                 rider_photo = request.build_absolute_uri(request.user.rider_profile.user_photo.url)
@@ -122,9 +149,14 @@ class CreateRideView(APIView):
                 "user_photo": rider_photo,
             }
             ride_data["rider_details"] = rider_details
+            # ----------------------------------------------------------------
 
-            # Push the request ONLY to drivers within the radius, one personal group at a time
             for driver in nearby_drivers:
+                print(
+                    f"[DEBUG]   → pushing ride {ride.id} to driver_{driver.user_id} "
+                    f"(vehicle='{driver.vehicle_type}', {driver.distance.km:.2f} km away)",
+                    flush=True,
+                )
                 async_to_sync(channel_layer.group_send)(
                     f"driver_{driver.user_id}",
                     {
@@ -140,6 +172,8 @@ class CreateRideView(APIView):
             response_data['nearby_drivers_count'] = nearby_drivers.count()
 
             return Response(response_data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class RideHistoryView(APIView):

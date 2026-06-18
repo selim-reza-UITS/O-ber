@@ -46,6 +46,8 @@ class RiderProfile(models.Model):
     user_photo = models.ImageField(upload_to='rider/photos/')
 
 class DriverProfile(models.Model):
+
+
     GENDER_CHOICES = [('M', 'Male'), ('F', 'Female'), ('O', 'Other')]
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='driver_profile')

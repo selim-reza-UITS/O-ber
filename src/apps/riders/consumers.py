@@ -181,7 +181,12 @@ class DriverDiscoveryConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         """ Handles messages sent FROM the driver (like location updates) """
-        data = json.loads(text_data)
+        try:
+            data = json.loads(text_data or "{}")
+        except (ValueError, TypeError):
+            return
+        if data.get("type") in ("ping", "heartbeat"):
+            await self.send(text_data=json.dumps({"type": "pong"}))
         
         # Example: If driver sends a message, broadcast it to the whole discovery group
         await self.channel_layer.group_send(
