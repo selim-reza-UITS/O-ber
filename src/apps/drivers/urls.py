@@ -3,5 +3,6 @@ from src.apps.accounts.api.views_driver import DriverOnboardingView,DriverSelfie
 urlpatterns = [
     path('driver-onboarding/', DriverOnboardingView.as_view(), name='driver-onboarding'),
     path('driver-selfie-verify/', DriverSelfieVerifyView.as_view(), name='driver-selfie-verify'),
+    
         
 ]

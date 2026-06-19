@@ -17,6 +17,7 @@ from src.apps.accounts.models import DriverProfile
 from .serializers import DriverDashboardSerializer
 from .models import DriverShift
 from django.utils import timezone
+from django.db.models import Case, When, IntegerField
 
 class UpdateDriverLocationView(APIView):
     # Security: Ensure only authenticated DRIVERS can call this
@@ -180,7 +181,58 @@ class AcceptRideView(APIView):
         
 
 
+class DriverCancelRideView(APIView):
+    """
+    Lets the assigned driver cancel a trip they accepted, as long as the
+    passenger has NOT been picked up yet (status == 'ACCEPTED').
+    The ride is requeued: driver is unassigned and status returns to
+    'SEARCHING' so another nearby driver can accept it.
+    """
+    permission_classes = [IsAuthenticated]
 
+    CANCELLABLE_STATUSES = ['ACCEPTED']
+
+    def post(self, request, ride_id):
+        with transaction.atomic():
+            try:
+                ride = Ride.objects.select_for_update().get(id=ride_id)
+            except Ride.DoesNotExist:
+                return Response({"error": "Ride not found"}, status=404)
+
+            # Only the currently assigned driver may cancel this ride
+            if ride.driver_id != request.user.id:
+                return Response({"error": "You are not the driver for this ride"}, status=403)
+
+            # Only before pickup. 'STARTED' means the passenger is already picked up.
+            if ride.status not in self.CANCELLABLE_STATUSES:
+                return Response(
+                    {"error": "You can only cancel a ride you've accepted and not yet started."},
+                    status=400,
+                )
+
+            reason = request.data.get('reason', 'Driver cancelled before pickup')
+
+            # Requeue: drop this driver and reopen the ride for others
+            ride.driver = None
+            ride.status = 'SEARCHING'
+            ride.save(update_fields=['driver', 'status'])
+
+        # Tell the rider their driver cancelled and we're finding a new one
+        broadcast_ride_update(ride.id, {
+            "type": "DRIVER_CANCELLED",
+            "status": "SEARCHING",
+            "message": "Your driver cancelled. We're finding you a new driver.",
+            "reason": reason,
+        })
+
+        return Response(
+            {
+                "message": "Ride cancelled and requeued for other drivers.",
+                "ride_id": ride.id,
+                "status": ride.status,
+            },
+            status=200,
+        )
 
 
 class DriverProfileDashboardView(APIView):
@@ -329,15 +381,23 @@ class DriverEarningsView(APIView):
 
 class DriverTripHistoryView(APIView):
     """
-    Returns driver's completed trip history with ratings
+    Returns driver's trips: running rides first, then past trips (with ratings)
     """
     permission_classes = [IsAuthenticated]
+
+    RUNNING_STATUSES = ['ACCEPTED', 'ARRIVED', 'STARTED']
 
     def get(self, request):
         rides = Ride.objects.filter(
             driver=request.user
-        ).select_related('rider').order_by('-created_at')
-        
+        ).select_related('rider').annotate(
+            _running_first=Case(
+                When(status__in=self.RUNNING_STATUSES, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by('_running_first', '-created_at')
+
         history = []
         for ride in rides:
             ride_data = RideSerializer(ride).data
@@ -349,5 +409,5 @@ class DriverTripHistoryView(APIView):
                 ride_data['rating'] = None
                 ride_data['review_comment'] = None
             history.append(ride_data)
-        
+
         return Response(history)

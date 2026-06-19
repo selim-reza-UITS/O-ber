@@ -1,6 +1,6 @@
 from decimal import Decimal
 from math import ceil
-
+from django.db.models import Case, When, IntegerField
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.conf import settings
@@ -179,12 +179,23 @@ class CreateRideView(APIView):
 class RideHistoryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    RUNNING_STATUSES = ['ACCEPTED', 'ARRIVED', 'STARTED']
+
     def get(self, request):
         if request.user.is_driver:
-            rides = Ride.objects.filter(driver=request.user).order_by('-created_at')
+            qs = Ride.objects.filter(driver=request.user)
         else:
-            rides = Ride.objects.filter(rider=request.user).order_by('-created_at')
-        
+            qs = Ride.objects.filter(rider=request.user)
+
+        # Running rides first (0), then everything else (1); newest first within each group
+        rides = qs.annotate(
+            _running_first=Case(
+                When(status__in=self.RUNNING_STATUSES, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        ).order_by('_running_first', '-created_at')
+
         serializer = RideSerializer(rides, many=True)
         return Response(serializer.data)
 

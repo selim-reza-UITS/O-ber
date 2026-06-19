@@ -52,6 +52,7 @@ driver_pattern = [
     path('earnings/',drivers.DriverEarningsView.as_view(),name="driver_earnings"),
     path('trip-history/',drivers.DriverTripHistoryView.as_view(),name="driver_trip_history"),
     path('ride-status/<int:ride_id>/', payments.UpdateRideStatusView.as_view(), name='update_ride_status'),
+    path("cancel-ride/<int:ride_id>/", drivers.DriverCancelRideView.as_view(), name="driver_cancel_ride"),
 ]
 
 dashboard_patterns = [

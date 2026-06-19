@@ -45,6 +45,21 @@ class RideSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'status', 'estimated_price', 'rider', 'driver', 'requested_vehicle_type', 
                           'cancellation_reason', 'cancellation_fee']
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        pickup = instance.pickup_location
+        dropoff = instance.dropoff_location
+
+        # Point(lng, lat) -> .x = longitude, .y = latitude
+        data['pickup_lat'] = pickup.y if pickup else None
+        data['pickup_lng'] = pickup.x if pickup else None
+        data['dropoff_lat'] = dropoff.y if dropoff else None
+        data['dropoff_lng'] = dropoff.x if dropoff else None
+        data['is_running'] = instance.status in ['ACCEPTED', 'ARRIVED', 'STARTED']
+        return data
+    
+
     def get_driver_details(self, obj):
         if obj.driver and hasattr(obj.driver, 'driver_profile'):
             return SimpleDriverProfileSerializer(obj.driver.driver_profile).data
@@ -77,3 +92,4 @@ class RideSerializer(serializers.ModelSerializer):
         )
         
         return super().create(validated_data)
+
