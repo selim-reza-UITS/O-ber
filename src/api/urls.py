@@ -47,6 +47,7 @@ driver_pattern = [
     path("location-update/",drivers.UpdateDriverLocationView.as_view(),name="location_update"),
     path("available-for-rides/",drivers.AvailableRidesView.as_view(),name="check all available rider list"),
     path("accept-ride/<int:ride_id>/",drivers.AcceptRideView.as_view(),name="accept_riders"),
+    path("decline-ride/<int:ride_id>/", drivers.DriverDeclineRideView.as_view(), name="driver_decline_ride"),
     path('toggle-online/', drivers.DriverToggleOnlineView.as_view(), name='driver-toggle-online'),
     path('dashboard/',drivers.DriverProfileDashboardView.as_view(),name="driver_profile"),
     path('earnings/',drivers.DriverEarningsView.as_view(),name="driver_earnings"),

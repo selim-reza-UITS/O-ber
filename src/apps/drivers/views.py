@@ -19,6 +19,9 @@ from .models import DriverShift
 from django.utils import timezone
 from django.db.models import Case, When, IntegerField
 
+from src.apps.riders.models import Ride, RideDecline
+
+
 class UpdateDriverLocationView(APIView):
     # Security: Ensure only authenticated DRIVERS can call this
     permission_classes = [permissions.IsAuthenticated]
@@ -81,6 +84,8 @@ class AvailableRidesView(APIView):
         rides = Ride.objects.filter(
             status='SEARCHING',
             pickup_location__distance_lte=(driver_profile.last_location, D(km=5))
+        ).exclude(
+            declines__driver=request.user
         ).annotate(
             distance=Distance('pickup_location', driver_profile.last_location)
         ).order_by('distance')
@@ -179,7 +184,37 @@ class AcceptRideView(APIView):
                 "ride_id": ride.id
             })
         
+class DriverDeclineRideView(APIView):
+    """
+    Lets a driver decline a ride request that popped up in their app.
+    The ride stays SEARCHING and keeps being offered to OTHER drivers, but it
+    will no longer appear in THIS driver's available-rides list.
+    """
+    permission_classes = [IsAuthenticated]
 
+    def post(self, request, ride_id):
+        try:
+            ride = Ride.objects.get(id=ride_id)
+        except Ride.DoesNotExist:
+            return Response({"error": "Ride not found"}, status=404)
+
+        # Only an open, still-searching request can be declined.
+        if ride.status != 'SEARCHING':
+            return Response(
+                {"error": "This ride is no longer available to decline."},
+                status=400,
+            )
+
+        # Idempotent: unique_together(ride, driver) prevents duplicate rows.
+        RideDecline.objects.get_or_create(ride=ride, driver=request.user)
+
+        return Response(
+            {
+                "message": "Ride declined. It won't be shown to you again.",
+                "ride_id": ride.id,
+            },
+            status=200,
+        )
 
 class DriverCancelRideView(APIView):
     """
@@ -199,8 +234,9 @@ class DriverCancelRideView(APIView):
             except Ride.DoesNotExist:
                 return Response({"error": "Ride not found"}, status=404)
 
-            # Only the currently assigned driver may cancel this ride
-            if ride.driver_id != request.user.id:
+            # Only the currently assigned driver may cancel this ride.
+            # Compare instances (User PK is `user_id`, so there is no `.id`).
+            if ride.driver != request.user:
                 return Response({"error": "You are not the driver for this ride"}, status=403)
 
             # Only before pickup. 'STARTED' means the passenger is already picked up.

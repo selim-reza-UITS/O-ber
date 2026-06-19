@@ -92,3 +92,16 @@ class RideReview(models.Model):
 
     def __str__(self):
         return f"{self.rating} stars for Ride {self.ride.id}"
+
+
+class RideDecline(models.Model):
+    """Records that a specific driver declined a specific ride request."""
+    ride = models.ForeignKey(Ride, on_delete=models.CASCADE, related_name='declines')
+    driver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='declined_rides')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('ride', 'driver')
+
+    def __str__(self):
+        return f"Driver {self.driver_id} declined Ride {self.ride_id}"
