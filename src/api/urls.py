@@ -34,6 +34,7 @@ rider_pattern = [
     path("ride/estimate/",riders.FareEstimateView.as_view(),name="fare_estimate"),
     path("ride/create/",riders.CreateRideView.as_view(),name="request_for_a_ride"),
     path("ride/history/",riders.RideHistoryView.as_view(),name="all_ride_history"),
+    path("ride/active/", riders.ActiveRideView.as_view(), name="active_ride"),
     path("ride/<int:ride_id>/",riders.RideDetailView.as_view(),name="ride_detail"),
     path("ride/<int:ride_id>/cancel/",riders.CancelRideView.as_view(),name="cancel_ride"),
     path("ride/<int:ride_id>/review/",riders.RideReviewView.as_view(),name="review_ride"),

@@ -286,3 +286,40 @@ class RideReviewView(APIView):
                 "reviewer": request.user.full_name,
             }
         }, status=201)
+
+class ActiveRideView(APIView):
+    """
+    Returns the rider's current ongoing ride (if any).
+
+    Called when the rider re-opens the app. If they had a ride that is still
+    SEARCHING for a driver — or already ACCEPTED / ARRIVED / STARTED — we
+    return it so the app can restore the correct screen instead of starting
+    a brand-new search.
+    """
+    permission_classes = [IsRider]
+
+    # Statuses that mean "something is happening right now"
+    ACTIVE_STATUSES = ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'STARTED']
+
+    def get(self, request):
+        ride = (
+            Ride.objects
+            .filter(rider=request.user, status__in=self.ACTIVE_STATUSES)
+            .order_by('-created_at')
+            .first()
+        )
+
+        if not ride:
+            return Response(
+                {"has_active_ride": False, "ride": None},
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {
+                "has_active_ride": True,
+                "is_searching": ride.status == 'SEARCHING',
+                "ride": RideSerializer(ride).data,
+            },
+            status=status.HTTP_200_OK,
+        )
