@@ -57,6 +57,20 @@ class RideSerializer(serializers.ModelSerializer):
         data['dropoff_lat'] = dropoff.y if dropoff else None
         data['dropoff_lng'] = dropoff.x if dropoff else None
         data['is_running'] = instance.status in ['ACCEPTED', 'ARRIVED', 'STARTED']
+
+        # --- Estimated distance & time (same logic as calculate_dynamic_fare) ---
+        if pickup and dropoff:
+            # PostGIS distance is in degrees, ~111.32 km per degree
+            distance_km = pickup.distance(dropoff) * 111.32
+            # Duration based on average speed of 40 km/h
+            estimated_minutes = (distance_km / 40) * 60
+
+            data['estimated_distance_km'] = round(distance_km, 2)
+            data['estimated_time_min'] = round(estimated_minutes)
+        else:
+            data['estimated_distance_km'] = None
+            data['estimated_time_min'] = None
+
         return data
     
 
