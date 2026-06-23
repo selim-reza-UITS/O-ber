@@ -364,3 +364,40 @@ class MarketingSerializer(serializers.ModelSerializer):
         elif obj.image:
             return obj.image.url
         return None
+
+class AdminPaymentSerializer(serializers.ModelSerializer):
+    """
+    Flattened, admin-facing view of a single ride's payment.
+    One Transaction == one Ride (Transaction.ride is a OneToOneField).
+    """
+    ride_id = serializers.ReadOnlyField(source='ride.id')
+    driver_id = serializers.ReadOnlyField(source='ride.driver.user_id')
+    driver_name = serializers.ReadOnlyField(source='ride.driver.full_name')
+    rider_id = serializers.ReadOnlyField(source='ride.rider.user_id')
+    rider_name = serializers.ReadOnlyField(source='ride.rider.full_name')
+    pickup = serializers.ReadOnlyField(source='ride.pickup_address')
+    dropoff = serializers.ReadOnlyField(source='ride.dropoff_address')
+    payment_by = serializers.SerializerMethodField()
+    payment_amount = serializers.DecimalField(
+        source='amount', max_digits=10, decimal_places=2, read_only=True
+    )
+    vehicle_type = serializers.ReadOnlyField(source='ride.requested_vehicle_type')
+    ride_status = serializers.ReadOnlyField(source='ride.status')
+
+    class Meta:
+        model = Transaction
+        fields = [
+            'id',
+            'ride_id',
+            'driver_id', 'driver_name',
+            'rider_id', 'rider_name',
+            'pickup', 'dropoff',
+            'payment_by', 'payment_amount',
+            'vehicle_type', 'status', 'ride_status', 'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_payment_by(self, obj):
+        # Ride.payment_method is 'CASH' or 'CARD'; show it as Cash / Digital.
+        method = getattr(obj.ride, 'payment_method', None)
+        return {'CASH': 'Cash', 'CARD': 'Digital'}.get(method, method or 'Unknown')

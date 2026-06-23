@@ -208,14 +208,21 @@ class DriverDeclineRideView(APIView):
         # Idempotent: unique_together(ride, driver) prevents duplicate rows.
         RideDecline.objects.get_or_create(ride=ride, driver=request.user)
 
+        # Re-offer the ride to the next nearby driver(s). Drivers who already
+        # declined (including this one) are excluded inside the dispatcher, so
+        # the ride effectively "moves" to another driver.
+        from src.apps.riders.dispatch import dispatch_ride_to_nearby_drivers
+        remaining = dispatch_ride_to_nearby_drivers(ride, request=request)
+
         return Response(
             {
-                "message": "Ride declined. It won't be shown to you again.",
+                "message": "Ride declined and re-offered to other drivers.",
                 "ride_id": ride.id,
+                "drivers_notified": remaining,
             },
             status=200,
         )
-
+    
 class DriverCancelRideView(APIView):
     """
     Lets the assigned driver cancel a trip they accepted, as long as the

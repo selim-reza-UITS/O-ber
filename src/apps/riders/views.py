@@ -19,7 +19,9 @@ from src.apps.drivers.utils import broadcast_ride_update
 from .models import Ride, RideReview
 from .serializers import RideSerializer
 from .utils import calculate_dynamic_fare
+import logging
 
+logger = logging.getLogger("ober.rides")
 class FareEstimateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -84,96 +86,101 @@ class CreateRideView(APIView):
     permission_classes = [IsRider]
 
     def post(self, request):
+        # ---- DEBUG: log the incoming request ----
+        logger.debug(
+            "[CreateRide] incoming request from user=%s payload=%s",
+            getattr(request.user, "user_id", None),
+            dict(request.data),
+        )
+
         serializer = RideSerializer(data=request.data)
-        if serializer.is_valid():
-            v_type = request.data.get('requested_vehicle_type', 'ECONOMY')
-            p_lat = serializer.validated_data['pickup_lat']
-            p_lng = serializer.validated_data['pickup_lng']
-            d_lat = serializer.validated_data['dropoff_lat']
-            d_lng = serializer.validated_data['dropoff_lng']
+        if not serializer.is_valid():
+            # ---- DEBUG: log why validation failed ----
+            logger.warning("[CreateRide] serializer invalid: %s", serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            v_type = request.data.get("requested_vehicle_type", "ECONOMY")
+            p_lat = serializer.validated_data["pickup_lat"]
+            p_lng = serializer.validated_data["pickup_lng"]
+            d_lat = serializer.validated_data["dropoff_lat"]
+            d_lng = serializer.validated_data["dropoff_lng"]
 
             pickup_p = Point(p_lng, p_lat, srid=4326)
             dropoff_p = Point(d_lng, d_lat, srid=4326)
             estimated_price = calculate_dynamic_fare(pickup_p, dropoff_p, v_type)
 
+            # ---- DEBUG: log the computed inputs ----
+            logger.debug(
+                "[CreateRide] v_type=%s pickup=(%s,%s) dropoff=(%s,%s) estimated_price=%s",
+                v_type, p_lat, p_lng, d_lat, d_lng, estimated_price,
+            )
+
             ride = serializer.save(
                 rider=request.user,
                 requested_vehicle_type=v_type,
                 estimated_price=estimated_price,
-                status='SEARCHING'
+                status="SEARCHING",
+            )
+            logger.info("[CreateRide] ride %s created (status=SEARCHING)", ride.id)
+
+            # Import here to avoid any circular-import surprises at module load.
+            from .dispatch import (
+                build_ride_payload,
+                dispatch_ride_to_nearby_drivers,
+                get_nearby_drivers_for_ride,
             )
 
+            # ---- DEBUG: enumerate the candidate drivers before dispatching ----
             radius_km = getattr(settings, "RIDE_DISCOVERY_RADIUS_KM", 5)
-            nearby_drivers = DriverProfile.objects.filter(
-                is_online=True,            # actually toggled online
-                admin_verified=True,       # the real "approved driver" gate (is_active is admin-only and often unset)
-                last_location__isnull=False,
-                last_location__distance_lte=(ride.pickup_location, D(km=radius_km)),
-                # Optional vehicle-type match — case-insensitive so "Economy" matches "ECONOMY".
-                # Remove this line if your driver vehicle_type values don't map cleanly to requested types.
-                vehicle_type__iexact=v_type,
-            ).annotate(
-                distance=Distance('last_location', ride.pickup_location)
-            ).order_by('distance')
-
-            # --- TEMP DEBUG ---
-            print(
-                f"[DEBUG] Ride {ride.id} requested='{v_type}' "
-                f"pickup={ride.pickup_location.y},{ride.pickup_location.x} "
-                f"→ {nearby_drivers.count()} driver(s) within {radius_km}km",
-                flush=True,
+            candidates = list(get_nearby_drivers_for_ride(ride))
+            logger.debug(
+                "[CreateRide] ride %s: %s candidate driver(s) within %skm "
+                "(vehicle_type=%s, pickup=%s,%s)",
+                ride.id, len(candidates), radius_km, v_type,
+                ride.pickup_location.y, ride.pickup_location.x,
             )
-            # ------------------
-
-            channel_layer = get_channel_layer()
-            ride_data = RideSerializer(ride).data
-
-            # ---- enrich ride_data (this is the block you must NOT drop) ----
-            total_distance = round(ride.pickup_location.distance(ride.dropoff_location) * 111.32, 2)
-            eta_minutes = max(1, ceil((total_distance / 40) * 60))
-            ride_data["distance"] = total_distance
-            ride_data["estimated_time"] = eta_minutes
-            ride_data["total_distance"] = total_distance
-            ride_data["total_price"] = str(ride.estimated_price)
-            ride_data["eta"] = eta_minutes
-
-            rider_photo = None
-            if hasattr(request.user, 'rider_profile') and request.user.rider_profile.user_photo:
-                rider_photo = request.build_absolute_uri(request.user.rider_profile.user_photo.url)
-
-            rider_details = {
-                "user_id": request.user.user_id,
-                "full_name": request.user.full_name,
-                "email": request.user.email,
-                "phone_number": request.user.phone_number,
-                "user_photo": rider_photo,
-            }
-            ride_data["rider_details"] = rider_details
-            # ----------------------------------------------------------------
-
-            for driver in nearby_drivers:
-                print(
-                    f"[DEBUG]   → pushing ride {ride.id} to driver_{driver.user_id} "
-                    f"(vehicle='{driver.vehicle_type}', {driver.distance.km:.2f} km away)",
-                    flush=True,
-                )
-                async_to_sync(channel_layer.group_send)(
-                    f"driver_{driver.user_id}",
-                    {
-                        "type": "new_ride_available",
-                        "data": {
-                            "event": "NEW_RIDE_AVAILABLE",
-                            "ride": ride_data,
-                        }
-                    }
+            for d in candidates:
+                dist_km = getattr(getattr(d, "distance", None), "km", None)
+                logger.debug(
+                    "[CreateRide]   candidate driver_%s vehicle=%s distance=%s",
+                    d.user_id, d.vehicle_type,
+                    f"{dist_km:.2f}km" if dist_km is not None else "n/a",
                 )
 
-            response_data = ride_data
-            response_data['nearby_drivers_count'] = nearby_drivers.count()
+            # Push the ride to every eligible nearby driver. The same dispatcher
+            # is reused by DriverDeclineRideView so a decline re-offers the ride.
+            drivers_notified = dispatch_ride_to_nearby_drivers(ride, request=request)
+            logger.info(
+                "[CreateRide] ride %s dispatched to %s driver(s)",
+                ride.id, drivers_notified,
+            )
+            if drivers_notified == 0:
+                logger.warning(
+                    "[CreateRide] ride %s: NO drivers notified — check that drivers "
+                    "are online, admin_verified, have a recent location, match "
+                    "vehicle_type='%s', and are within %skm.",
+                    ride.id, v_type, radius_km,
+                )
+
+            response_data = build_ride_payload(ride, request=request)
+            response_data["nearby_drivers_count"] = drivers_notified
+
+            # ---- DEBUG: log the outgoing payload keys ----
+            logger.debug(
+                "[CreateRide] ride %s response keys=%s",
+                ride.id, list(response_data.keys()),
+            )
 
             return Response(response_data, status=status.HTTP_201_CREATED)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            # ---- DEBUG: never swallow a 500 silently ----
+            logger.exception("[CreateRide] unexpected error while creating ride")
+            return Response(
+                {"error": "Could not create ride. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class RideHistoryView(APIView):

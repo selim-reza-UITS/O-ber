@@ -7,10 +7,11 @@ from rest_framework import status, permissions, generics
 from rest_framework.pagination import PageNumberPagination
 from .models import Marketing, TermsAndConditionsModel, PrivacyAndPolicyModel, AboutUs, HelpSupport, PriceConfig, Notification, Commision
 from .serializers import (
-    MarketingSerializer, TermsSerializer, PrivacySerializer, AboutUsSerializer, HelpSupportSerializer, 
-    PriceConfigSerializer, NotificationSerializer, AdminUserListSerializer, 
+    MarketingSerializer, TermsSerializer, PrivacySerializer, AboutUsSerializer, HelpSupportSerializer,
+    PriceConfigSerializer, NotificationSerializer, AdminUserListSerializer,
     AdminTransactionSerializer, AdminRideListSerializer, AdminProfileSerializer,
-    AdminPasswordUpdateSerializer, AdminDriverListSerializer, DriverDetailSerializer, AdminRideDetailSerializer, CashWithdrawSerializer, CommisionSerializer, BlockSerilaizer
+    AdminPasswordUpdateSerializer, AdminDriverListSerializer, DriverDetailSerializer, AdminRideDetailSerializer, CashWithdrawSerializer, CommisionSerializer, BlockSerilaizer,
+    AdminPaymentSerializer
 )
 from src.apps.accounts.models import DriverProfile, User, PendingDriverUpdate
 from src.apps.accounts.serializers_driver import DriverProfileSerializer
@@ -625,3 +626,127 @@ class MarketingDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method in permissions.SAFE_METHODS:
             return [permissions.AllowAny()]
         return [permissions.IsAdminUser()]
+
+class AdminPaymentListView(generics.ListAPIView):
+    """
+    Admin: list every payment made on the platform (one row per ride).
+
+    Optional query params:
+      ?status=SUCCESS|PENDING|FAILED   -> filter by payment status
+      ?payment_method=CASH|CARD        -> filter by how the rider paid
+      ?search=<text>                   -> match ride id / driver / rider name
+      ?page=<n>&page_size=<n>          -> pagination
+    """
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = AdminPaymentSerializer
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        qs = (
+            Transaction.objects
+            .select_related('ride', 'ride__driver', 'ride__rider')
+            .order_by('-created_at')
+        )
+        params = self.request.query_params
+
+        status_param = params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param.upper())
+
+        method = params.get('payment_method')
+        if method:
+            qs = qs.filter(ride__payment_method=method.upper())
+
+        search = params.get('search')
+        if search:
+            qs = qs.filter(
+                Q(ride__id__icontains=search) |
+                Q(ride__driver__full_name__icontains=search) |
+                Q(ride__rider__full_name__icontains=search)
+            )
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        total_amount = (
+            queryset.filter(status='SUCCESS').aggregate(Sum('amount'))['amount__sum'] or 0
+        )
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            response = self.get_paginated_response(serializer.data)
+            response.data['total_successful_amount'] = str(total_amount)
+            return response
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'count': queryset.count(),
+            'total_successful_amount': str(total_amount),
+            'results': serializer.data,
+        })
+
+
+class AdminPaymentDetailView(generics.RetrieveDestroyAPIView):
+    """
+    Admin: retrieve a single payment, or DELETE it (the "User Delete" action
+    from the spec). Deleting only removes the Transaction record; the Ride is
+    left intact.
+    """
+    permission_classes = [permissions.IsAdminUser]
+    queryset = Transaction.objects.select_related(
+        'ride', 'ride__driver', 'ride__rider'
+    ).all()
+    serializer_class = AdminPaymentSerializer
+    lookup_field = 'pk'
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        ride_id = instance.ride_id
+        self.perform_destroy(instance)
+        return Response(
+            {'message': f'Payment for ride {ride_id} deleted.'},
+            status=status.HTTP_200_OK,
+        )
+
+
+class AdminUserDeleteView(generics.DestroyAPIView):
+    """
+    Admin: delete ANY user (rider OR driver) by their user_id.
+
+    Deleting the User cascades to their RiderProfile / DriverProfile and
+    related rows (both profiles use on_delete=CASCADE). Rides they took as a
+    rider are removed (Ride.rider is CASCADE); rides they drove are kept but
+    have the driver set to NULL (Ride.driver is SET_NULL).
+
+    Guard rails: an admin cannot delete their own account, nor any
+    staff/superuser account, through this endpoint.
+    """
+    permission_classes = [permissions.IsAdminUser]
+    queryset = User.objects.all()
+    serializer_class = AdminUserListSerializer
+    lookup_field = 'user_id'
+    lookup_url_kwarg = 'user_id'
+
+    def destroy(self, request, *args, **kwargs):
+        user = self.get_object()
+
+        if user == request.user:
+            return Response(
+                {"error": "You cannot delete your own account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if user.is_staff or user.is_superuser:
+            return Response(
+                {"error": "Staff/admin accounts cannot be deleted from this endpoint."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        user_id = user.user_id
+        full_name = user.full_name
+        role = "driver" if user.is_driver else "rider"
+        user.delete()
+        return Response(
+            {"message": f"{role.capitalize()} '{full_name}' (ID: {user_id}) deleted."},
+            status=status.HTTP_200_OK,
+        )

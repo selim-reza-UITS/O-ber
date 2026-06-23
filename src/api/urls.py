@@ -69,7 +69,7 @@ dashboard_patterns = [
     path("admin/stats/", dashboard.AdminDashboardStatsView.as_view(), name="admin_stats"),
     path("admin/users/", dashboard.AdminUserListView.as_view(), name="admin_users"),
     path("admin/users/<str:pk>/", dashboard.AdminUserDetailView.as_view(), name="admin_user_detail"),
-
+    path("admin/users/delete/<str:user_id>/", dashboard.AdminUserDeleteView.as_view(), name="admin_user_delete"),
     path("search/users/", dashboard.SearchUsersListView.as_view(), name="search_users"),
 
     path("admin/drivers/", dashboard.AdminDriverListView.as_view(), name="admin_drivers"),
@@ -84,6 +84,8 @@ dashboard_patterns = [
     
     path("admin/transactions/", dashboard.AdminTransactionListView.as_view(), name="admin_transactions"),
     path("admin/transactions/delete/<int:pk>/", dashboard.AdminTransactionDeleteView.as_view(), name="admin_transaction_delete"),
+    path("admin/payments/", dashboard.AdminPaymentListView.as_view(), name="admin_payments"),
+    path("admin/payments/<int:pk>/", dashboard.AdminPaymentDetailView.as_view(), name="admin_payment_detail"),
     path("admin/notifications/", dashboard.AdminNotificationListView.as_view(), name="admin_notifications"),
     path("admin/notifications/delete/<int:pk>/", dashboard.AdminNotificationDeleteView.as_view(), name="admin_notification_delete"),
     path("admin/pricing/", dashboard.AdminPriceConfigView.as_view(), name="admin_pricing"),
