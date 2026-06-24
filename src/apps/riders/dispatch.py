@@ -5,10 +5,11 @@ from channels.layers import get_channel_layer
 from django.conf import settings
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.measure import D
-
+from datetime import timedelta
+from django.utils import timezone
 from src.apps.accounts.models import DriverProfile
 from .serializers import RideSerializer
-
+from src.apps.drivers.utils import broadcast_ride_update
 
 def build_ride_payload(ride, request=None):
     """
@@ -48,7 +49,7 @@ def get_nearby_drivers_for_ride(ride):
     driver who already declined THIS ride. Ordered nearest-first.
     """
     radius_km = getattr(settings, "RIDE_DISCOVERY_RADIUS_KM", 5)
-    return (
+    qs = (
         DriverProfile.objects.filter(
             is_online=True,
             admin_verified=True,
@@ -57,10 +58,77 @@ def get_nearby_drivers_for_ride(ride):
             vehicle_type__iexact=ride.requested_vehicle_type,
         )
         .exclude(user__declined_rides__ride=ride)
-        .annotate(distance=Distance("last_location", ride.pickup_location))
+    )
+
+    # Defense-in-depth against "phantom" drivers: if a driver loses their socket
+    # without a clean disconnect, is_online can stay True. Optionally drop
+    # drivers whose profile hasn't been touched (location-update bumps
+    # updated_at) within the freshness window, so they can't silently absorb a
+    # dispatch. Tune RIDE_DRIVER_MAX_LOCATION_AGE_SECONDS to your app's
+    # location-ping interval; leave it unset/None to disable.
+    max_age = getattr(settings, "RIDE_DRIVER_MAX_LOCATION_AGE_SECONDS", None)
+    if max_age:
+        cutoff = timezone.now() - timedelta(seconds=max_age)
+        qs = qs.filter(updated_at__gte=cutoff)
+
+    return (
+        qs.annotate(distance=Distance("last_location", ride.pickup_location))
         .order_by("distance")
     )
 
+def offer_ride_to_next_driver(ride, request=None):
+    """
+    SEQUENTIAL dispatch. Offer the ride to the SINGLE nearest eligible driver
+    who has not declined it yet. If that driver declines (or doesn't respond in
+    time) this is called again to advance to the next-nearest driver.
+
+    Returns the DriverProfile the ride was offered to, or None if nobody is
+    left (in which case the rider is told NO_DRIVERS_AVAILABLE).
+    """
+    if ride.status != "SEARCHING":
+        return None
+
+    driver = get_nearby_drivers_for_ride(ride).first()
+
+    if driver is None:
+        ride.offered_to = None
+        ride.offered_at = None
+        ride.save(update_fields=["offered_to", "offered_at"])
+        broadcast_ride_update(ride.id, {
+            "type": "NO_DRIVERS_AVAILABLE",
+            "ride_id": ride.id,
+            "message": "No nearby drivers are available right now.",
+        })
+        return None
+
+    # Record the current offer so we can enforce accept-exclusivity + timeouts.
+    ride.offered_to = driver.user
+    ride.offered_at = timezone.now()
+    ride.save(update_fields=["offered_to", "offered_at"])
+
+    channel_layer = get_channel_layer()
+    ride_data = build_ride_payload(ride, request=request)
+    async_to_sync(channel_layer.group_send)(
+        f"driver_{driver.user_id}",
+        {
+            "type": "new_ride_available",
+            "data": {"event": "NEW_RIDE_AVAILABLE", "ride": ride_data},
+        },
+    )
+
+    # Auto-advance if this driver doesn't respond in time (needs Celery+Redis).
+    timeout = getattr(settings, "RIDE_OFFER_TIMEOUT_SECONDS", 20)
+    if timeout:
+        try:
+            from .tasks import task_expire_ride_offer
+            task_expire_ride_offer.apply_async(
+                args=[ride.id, driver.user_id, ride.offered_at.isoformat()],
+                countdown=timeout,
+            )
+        except Exception:
+            pass
+
+    return driver
 
 def dispatch_ride_to_nearby_drivers(ride, request=None):
     """

@@ -161,9 +161,9 @@ class DriverDiscoveryConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.general_group, self.channel_name)
         await self.channel_layer.group_add(self.type_group, self.channel_name)
         await self.channel_layer.group_add(self.personal_group, self.channel_name)
+        await self._set_online_status(True)
 
         await self.accept()
-
         # Confirm connection to the driver
         await self.send(text_data=json.dumps({
             "status": "Connected",
@@ -171,6 +171,8 @@ class DriverDiscoveryConsumer(AsyncWebsocketConsumer):
         }))
 
     async def disconnect(self, close_code):
+        if getattr(self, "user", None) is not None:
+            await self._set_online_status(False)
         # Leave groups on disconnect (guard against close before groups were set)
         if hasattr(self, "general_group"):
             await self.channel_layer.group_discard(self.general_group, self.channel_name)
@@ -210,3 +212,13 @@ class DriverDiscoveryConsumer(AsyncWebsocketConsumer):
             "type": "NEW_RIDE_REQUEST",
             "data": event["data"]
         }))
+
+    @database_sync_to_async
+    def _set_online_status(self, online):
+        """Keep DriverProfile.is_online in sync with the live discovery socket.
+
+        Uses .update() so we don't trigger the model's custom save() and don't
+        bump updated_at (which we use as a location-freshness signal).
+        """
+        from src.apps.accounts.models import DriverProfile
+        DriverProfile.objects.filter(user=self.user).update(is_online=online)

@@ -127,7 +127,7 @@ class CreateRideView(APIView):
             # Import here to avoid any circular-import surprises at module load.
             from .dispatch import (
                 build_ride_payload,
-                dispatch_ride_to_nearby_drivers,
+                offer_ride_to_next_driver,
                 get_nearby_drivers_for_ride,
             )
 
@@ -150,21 +150,14 @@ class CreateRideView(APIView):
 
             # Push the ride to every eligible nearby driver. The same dispatcher
             # is reused by DriverDeclineRideView so a decline re-offers the ride.
-            drivers_notified = dispatch_ride_to_nearby_drivers(ride, request=request)
-            logger.info(
-                "[CreateRide] ride %s dispatched to %s driver(s)",
-                ride.id, drivers_notified,
-            )
-            if drivers_notified == 0:
-                logger.warning(
-                    "[CreateRide] ride %s: NO drivers notified — check that drivers "
-                    "are online, admin_verified, have a recent location, match "
-                    "vehicle_type='%s', and are within %skm.",
-                    ride.id, v_type, radius_km,
-                )
+            offered_driver = offer_ride_to_next_driver(ride, request=request)
+            if offered_driver is not None:
+                logger.info("[CreateRide] ride %s offered to driver_%s", ride.id, offered_driver.user_id)
+            else:
+                logger.warning("[CreateRide] ride %s: NO eligible drivers to offer", ride.id)
 
             response_data = build_ride_payload(ride, request=request)
-            response_data["nearby_drivers_count"] = drivers_notified
+            response_data["offered"] = offered_driver is not None
 
             # ---- DEBUG: log the outgoing payload keys ----
             logger.debug(

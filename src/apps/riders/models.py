@@ -48,6 +48,13 @@ class Ride(models.Model):
     cancelled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='cancelled_rides')
     cancellation_reason = models.TextField(null=True, blank=True)
     cancellation_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    # Sequential dispatch: the SINGLE driver currently being offered this ride,
+    # and when the offer was sent (used to time out non-responders and advance
+    # to the next-nearest driver).
+    offered_to = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+'
+    )
+    offered_at = models.DateTimeField(null=True, blank=True)
 
 
 class RideRequest(models.Model):

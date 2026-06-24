@@ -107,7 +107,9 @@ class AcceptRideView(APIView):
 
             if ride.status != 'SEARCHING':
                 return Response({"error": "Ride already taken or cancelled"}, status=400)
-
+            # Only the driver currently holding the offer may accept.
+            if ride.offered_to_id and ride.offered_to_id != request.user.user_id:
+                return Response({"error": "This ride has moved to another driver."}, status=409)
             # --- Geofence guard: driver must be within the allowed radius of the pickup ---
             driver_profile = request.user.driver_profile
             if not driver_profile.last_location:
@@ -125,6 +127,8 @@ class AcceptRideView(APIView):
             # Assign driver and change status
             ride.driver = request.user
             ride.status = 'ACCEPTED'
+            ride.offered_to = None
+            ride.offered_at = None
             ride.save()
             from django.db.models import Avg
             from math import ceil
@@ -211,14 +215,18 @@ class DriverDeclineRideView(APIView):
         # Re-offer the ride to the next nearby driver(s). Drivers who already
         # declined (including this one) are excluded inside the dispatcher, so
         # the ride effectively "moves" to another driver.
-        from src.apps.riders.dispatch import dispatch_ride_to_nearby_drivers
-        remaining = dispatch_ride_to_nearby_drivers(ride, request=request)
+        from src.apps.riders.dispatch import offer_ride_to_next_driver
+        next_driver = offer_ride_to_next_driver(ride, request=request)
 
         return Response(
             {
-                "message": "Ride declined and re-offered to other drivers.",
+                "message": (
+                    "Ride declined and offered to the next driver."
+                    if next_driver else
+                    "Ride declined. No more nearby drivers available."
+                ),
                 "ride_id": ride.id,
-                "drivers_notified": remaining,
+                "offered_to_driver": next_driver.user_id if next_driver else None,
             },
             status=200,
         )

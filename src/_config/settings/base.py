@@ -201,3 +201,11 @@ ADMIN_SUPPORT_EMAIL = EMAIL_HOST_USER
 
 # Max distance (km) a driver can be from a pickup to receive/accept a ride
 RIDE_DISCOVERY_RADIUS_KM = 5
+# How long a single driver has to accept before the offer auto-advances to the
+# next-nearest driver. Requires Celery + Redis. Set to 0/None to disable the
+# no-response timeout (decline still advances immediately).
+RIDE_OFFER_TIMEOUT_SECONDS = 20
+
+# Drop drivers whose location hasn't refreshed within this many seconds from
+# the candidate list. Tune to your app's location-ping interval; None disables.
+RIDE_DRIVER_MAX_LOCATION_AGE_SECONDS = 120
