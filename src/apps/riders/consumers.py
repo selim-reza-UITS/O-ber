@@ -79,21 +79,44 @@ class RideChatConsumer(AsyncWebsocketConsumer):
         if hasattr(self, 'room_group_name'):
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
-    async def receive(self, text_data):
-        data = json.loads(text_data)
-        content = data.get('content')
+        # Statuses during which the chat is open and messages are persisted.
+    # Chat exists only between an assigned driver and the rider, i.e. from the
+    # moment a driver accepts until the trip ends.
+    ACTIVE_CHAT_STATUSES = ['ACCEPTED', 'ARRIVED', 'STARTED']
 
-        # Save to DB
-        await self.save_ride_message(content)
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data or "{}")
+        except (ValueError, TypeError):
+            return
+
+        content = (data.get('content') or '').strip()
+        if not content:
+            return  # ignore empty / malformed messages
+
+        # Only persist + broadcast while the ride is actually going on.
+        ride_status = await self.get_ride_status(self.ride_id)
+        if ride_status not in self.ACTIVE_CHAT_STATUSES:
+            await self.send(text_data=json.dumps({
+                "type": "CHAT_CLOSED",
+                "message": "This ride is not active. Chat is closed.",
+                "status": ride_status,
+            }))
+            return
+
+        # Save to DB (kept for the lifetime of the ride)
+        message = await self.save_ride_message(content)
 
         # Broadcast to both Rider and Driver
         await self.channel_layer.group_send(
             self.room_group_name,
             {
                 'type': 'chat_message',
-                'content': content,
+                'message_id': message.id,
+                'content': message.content,
                 'sender_id': self.user.user_id,
-                'sender_name': self.user.full_name
+                'sender_name': self.user.full_name,
+                'timestamp': message.timestamp.isoformat(),
             }
         )
 
@@ -108,13 +131,21 @@ class RideChatConsumer(AsyncWebsocketConsumer):
             return None
 
     @database_sync_to_async
+    def get_ride_status(self, ride_id):
+        return (
+            Ride.objects.filter(id=ride_id)
+            .values_list('status', flat=True)
+            .first()
+        )
+
+    @database_sync_to_async
     def save_ride_message(self, content):
         return RideMessage.objects.create(
             ride=self.ride,
             sender=self.user,
             content=content
         )
-    
+        
 class DriverDiscoveryConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         # 1. JWT Authentication — same pattern as RideChatConsumer.

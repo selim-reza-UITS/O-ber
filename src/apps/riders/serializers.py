@@ -2,9 +2,9 @@
 from rest_framework import serializers
 from django.contrib.gis.geos import Point
 from .models import Ride
-from src.apps.accounts.models import User, DriverProfile
+from src.apps.accounts.models import User, DriverProfile, VehicleImage
 from src.apps.payments.models import Transaction
-
+from .models import Ride, RideMessage
 from .utils import calculate_dynamic_fare
 
 class SimpleUserSerializer(serializers.ModelSerializer):
@@ -12,11 +12,41 @@ class SimpleUserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['full_name', 'phone_number', 'user_id', 'is_driver']
 
+class RideMessageSerializer(serializers.ModelSerializer):
+    """Serializes a persisted in-ride chat message."""
+    sender_id = serializers.ReadOnlyField(source='sender.user_id')
+    sender_name = serializers.ReadOnlyField(source='sender.full_name')
+
+    class Meta:
+        model = RideMessage
+        fields = ['id', 'ride', 'sender_id', 'sender_name', 'content', 'timestamp']
+        read_only_fields = fields
+
+class RideVehicleImageSerializer(serializers.ModelSerializer):
+    """Vehicle photo(s) of the driver's car, with absolute URLs."""
+    image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VehicleImage
+        fields = ['id', 'image']
+
+    def get_image(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.image.url)
+        return obj.image.url
+
 class SimpleDriverProfileSerializer(serializers.ModelSerializer):
     user = SimpleUserSerializer(read_only=True)
+    # The driver's vehicle photos (gallery uploaded during onboarding).
+    vehicle_images = RideVehicleImageSerializer(
+        source='vehicle_photos', many=True, read_only=True
+    )
     class Meta:
         model = DriverProfile
-        fields = ['user', 'user_photo', 'vehicle_brand', 'vehicle_model', 'vehicle_plate', 'vehicle_type', 'last_location']
+        fields = ['user', 'user_photo', 'vehicle_brand', 'vehicle_model', 'vehicle_plate', 'vehicle_type', 'last_location', 'vehicle_images']
 
 class RideSerializer(serializers.ModelSerializer):
     pickup_lat = serializers.FloatField(write_only=True)
@@ -76,7 +106,10 @@ class RideSerializer(serializers.ModelSerializer):
 
     def get_driver_details(self, obj):
         if obj.driver and hasattr(obj.driver, 'driver_profile'):
-            return SimpleDriverProfileSerializer(obj.driver.driver_profile).data
+            # Pass context (request) down so vehicle image URLs are absolute.
+            return SimpleDriverProfileSerializer(
+                obj.driver.driver_profile, context=self.context
+            ).data
         return None
 
     def get_payment_status(self, obj):

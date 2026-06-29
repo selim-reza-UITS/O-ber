@@ -89,23 +89,27 @@ class DriverProfile(models.Model):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        # Synchronize `user.is_driver` whenever `admin_verified` changes.
-        # Ensure 'user' is loaded to avoid accidental lazy loading crashes
-        if hasattr(self, 'user') and self.user is not None:
-            fields_to_update = []
-            should_be_driver = self.admin_verified
-            
-            if self.user.is_driver != should_be_driver:
-                self.user.is_driver = should_be_driver
-                fields_to_update.append('is_driver')
-                
-            # If the user is a driver, they can no longer be a rider
-            if should_be_driver and self.user.is_rider:
-                self.user.is_rider = False
-                fields_to_update.append('is_rider')
-                
-            if fields_to_update:
-                self.user.save(update_fields=fields_to_update)
+        # Keep the User's role flags in sync with the driver's verification
+        # status. A driver is only "real" once the admin approves them
+        # (admin_verified=True): at that point they become a driver
+        # (is_driver=True) and stop being a plain rider/user (is_rider=False).
+        # If they are not (yet) verified they stay a normal rider/user.
+        if getattr(self, 'user', None) is None:
+            return
+
+        desired_is_driver = self.admin_verified
+        desired_is_rider = not self.admin_verified
+
+        fields_to_update = []
+        if self.user.is_driver != desired_is_driver:
+            self.user.is_driver = desired_is_driver
+            fields_to_update.append('is_driver')
+        if self.user.is_rider != desired_is_rider:
+            self.user.is_rider = desired_is_rider
+            fields_to_update.append('is_rider')
+
+        if fields_to_update:
+            self.user.save(update_fields=fields_to_update)
 
 class VehicleImage(models.Model):
     driver = models.ForeignKey(DriverProfile, on_delete=models.CASCADE, related_name='vehicle_photos')

@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 from src.apps.accounts.models import DriverProfile
 from src.apps.accounts.permissions import IsRider
 from src.apps.drivers.utils import broadcast_ride_update
-
+from .serializers import RideSerializer, RideMessageSerializer
 from .models import Ride, RideReview
 from .serializers import RideSerializer
 from .utils import calculate_dynamic_fare
@@ -287,6 +287,29 @@ class RideReviewView(APIView):
             }
         }, status=201)
 
+class RideChatHistoryView(APIView):
+    """
+    Returns the saved chat messages for a ride (oldest first).
+    Only the rider or the assigned driver of that ride may read them.
+    Messages are persisted for the whole lifetime of the ride, so reopening
+    the chat screen restores the full conversation.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, ride_id):
+        ride = get_object_or_404(Ride, id=ride_id)
+
+        # Only the two participants of this ride can read its chat.
+        if ride.rider != request.user and ride.driver != request.user:
+            return Response({"error": "Not authorized"}, status=403)
+
+        messages = ride.messages.select_related('sender').order_by('timestamp')
+        return Response({
+            "ride_id": ride.id,
+            "status": ride.status,
+            "messages": RideMessageSerializer(messages, many=True).data,
+        }, status=status.HTTP_200_OK)
+
 class ActiveRideView(APIView):
     """
     Returns the rider's current ongoing ride (if any).
@@ -319,7 +342,7 @@ class ActiveRideView(APIView):
             {
                 "has_active_ride": True,
                 "is_searching": ride.status == 'SEARCHING',
-                "ride": RideSerializer(ride).data,
+                "ride": RideSerializer(ride, context={'request': request}).data,
             },
             status=status.HTTP_200_OK,
         )

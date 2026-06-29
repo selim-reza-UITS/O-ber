@@ -47,6 +47,8 @@ class VehicleImageSerializer(serializers.ModelSerializer):
 
 class DriverProfileSerializer(serializers.ModelSerializer):
     vehicle_photos = VehicleImageSerializer(many=True, read_only=True)
+    # Exposes admin approval as a clear `is_verified` flag for the apps.
+    is_verified = serializers.BooleanField(source='admin_verified', read_only=True)
 
     class Meta:
         model = DriverProfile
@@ -54,7 +56,7 @@ class DriverProfileSerializer(serializers.ModelSerializer):
             'user_photo', 'date_of_birth', 'gender', 
             'nid_front', 'nid_back', 'license_front', 'license_back',
             'vehicle_type', 'vehicle_brand', 'vehicle_model', 'registration_photo',
-            'ai_verified', 'admin_verified', 'is_active', 'vehicle_photos'
+            'ai_verified', 'admin_verified', 'is_verified', 'is_active', 'vehicle_photos'
         ]
 
     def to_representation(self, instance):
