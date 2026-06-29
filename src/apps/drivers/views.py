@@ -452,6 +452,12 @@ class DriverTripHistoryView(APIView):
         history = []
         for ride in rides:
             ride_data = RideSerializer(ride).data
+            if ride.pickup_location and ride.dropoff_location:
+                ride_data['distance_km'] = round(
+                    ride.pickup_location.distance(ride.dropoff_location) * 111.32, 2
+                )
+            else:
+                ride_data['distance_km'] = None
             # Add rating if exists
             if hasattr(ride, 'review'):
                 ride_data['rating'] = ride.review.rating
