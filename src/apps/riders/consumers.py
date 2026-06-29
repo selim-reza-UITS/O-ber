@@ -75,6 +75,16 @@ class RideChatConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
+        # 3. On connect, push the full chat history so the client can render
+        #    the whole conversation immediately.
+        history = await self.get_all_messages()
+        await self.send(text_data=json.dumps({
+            "type": "chat_history",
+            "ride_id": self.ride_id,
+            "count": len(history),
+            "total_message": history,
+        }))
+
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
@@ -138,6 +148,26 @@ class RideChatConsumer(AsyncWebsocketConsumer):
             .first()
         )
 
+    @database_sync_to_async
+    def get_all_messages(self):
+        """Return every message of this ride's chat (oldest first)."""
+        messages = (
+            RideMessage.objects
+            .filter(ride=self.ride)
+            .select_related('sender')
+            .order_by('timestamp')
+        )
+        return [
+            {
+                'message_id': m.id,
+                'content': m.content,
+                'sender_id': m.sender.user_id,
+                'sender_name': m.sender.full_name,
+                'timestamp': m.timestamp.isoformat(),
+            }
+            for m in messages
+        ]
+    
     @database_sync_to_async
     def save_ride_message(self, content):
         return RideMessage.objects.create(
