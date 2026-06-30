@@ -274,6 +274,18 @@ class DriverDiscoveryConsumer(AsyncWebsocketConsumer):
             "data": event["data"]
         }))
 
+    async def ride_cancelled(self, event):
+        """Pushed when a rider cancels an already-accepted ride.
+
+        Triggered by CancelRideView via notify_driver(). The driver app stays
+        on this discovery socket (not the per-ride group), so this is how the
+        driver learns in real time that the rider cancelled.
+        """
+
+        await self.send(text_data=json.dumps({
+            "type": "RIDE_CANCELLED",
+            "data": event["data"],
+        }))
     @database_sync_to_async
     def _set_online_status(self, online):
         """Keep DriverProfile.is_online in sync with the live discovery socket.

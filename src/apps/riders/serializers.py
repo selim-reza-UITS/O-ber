@@ -55,7 +55,7 @@ class RideSerializer(serializers.ModelSerializer):
     dropoff_lng = serializers.FloatField(write_only=True)
     
     # Allow client to set vehicle_type and payment_method
-    vehicle_type = serializers.ChoiceField(choices=['ECONOMY', 'XL', 'PREMIUM'], default='ECONOMY', write_only=True)
+    vehicle_type = serializers.CharField(required=False, allow_blank=True, write_only=True)
     
     # Nested info
     driver_details = serializers.SerializerMethodField()
@@ -117,26 +117,45 @@ class RideSerializer(serializers.ModelSerializer):
             return obj.transaction.status
         return 'UNPAID'
 
+    def to_internal_value(self, data):
+        # Accept the rider's selected vehicle type under EITHER key
+        # (`vehicle_type` or `requested_vehicle_type`) and normalize to
+        # UPPERCASE. Previously only a `vehicle_type` ChoiceField was read, so a
+        # client sending `requested_vehicle_type` (or anything outside
+        # ECONOMY/XL/PREMIUM, e.g. SUV) silently fell back to ECONOMY.
+        validated = super().to_internal_value(data)
+        raw_type = data.get('vehicle_type') or data.get('requested_vehicle_type')
+        if raw_type:
+            validated['vehicle_type'] = str(raw_type).strip().upper()
+        return validated
+
     def create(self, validated_data):
         # Extract Lat/Lng and convert to PostGIS Point
         p_lat = validated_data.pop('pickup_lat')
         p_lng = validated_data.pop('pickup_lng')
         d_lat = validated_data.pop('dropoff_lat')
         d_lng = validated_data.pop('dropoff_lng')
-        
-        # Handle vehicle type
-        v_type = validated_data.pop('vehicle_type', 'ECONOMY')
+
+        # Resolve the requested vehicle type. IMPORTANT: pop BOTH keys
+        # unconditionally so neither leaks into Ride.objects.create() (the
+        # model has no `vehicle_type` field). Prefer an explicit
+        # requested_vehicle_type handed in by the view via .save(...), then the
+        # serializer's own vehicle_type field, then fall back to ECONOMY.
+        # Always normalized to UPPERCASE so it matches drivers via iexact.
+        requested_type = validated_data.pop('requested_vehicle_type', None)
+        field_type = validated_data.pop('vehicle_type', None)
+        v_type = requested_type or field_type or 'ECONOMY'
+        v_type = str(v_type).strip().upper()
         validated_data['requested_vehicle_type'] = v_type
 
         validated_data['pickup_location'] = Point(p_lng, p_lat, srid=4326)
         validated_data['dropoff_location'] = Point(d_lng, d_lat, srid=4326)
-        
+
         # Calculate Dynamic Fare
         validated_data['estimated_price'] = calculate_dynamic_fare(
             validated_data['pickup_location'],
             validated_data['dropoff_location'],
             v_type
         )
-        
-        return super().create(validated_data)
 
+        return super().create(validated_data)

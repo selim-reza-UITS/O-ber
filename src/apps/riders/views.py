@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from src.apps.accounts.models import DriverProfile
 from src.apps.accounts.permissions import IsRider
-from src.apps.drivers.utils import broadcast_ride_update
+from src.apps.drivers.utils import broadcast_ride_update, notify_driver
 from .serializers import RideSerializer, RideMessageSerializer
 from .models import Ride, RideReview
 from .serializers import RideSerializer
@@ -100,7 +100,12 @@ class CreateRideView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            v_type = request.data.get("requested_vehicle_type", "ECONOMY")
+            v_type = (
+                request.data.get("requested_vehicle_type")
+                or request.data.get("vehicle_type")
+                or "ECONOMY"
+            )
+            v_type = str(v_type).strip().upper()
             p_lat = serializer.validated_data["pickup_lat"]
             p_lng = serializer.validated_data["pickup_lng"]
             d_lat = serializer.validated_data["dropoff_lat"]
@@ -236,7 +241,24 @@ class CancelRideView(APIView):
             "cancelled_by": request.user.full_name,
             "reason": ride.cancellation_reason
         })
-        
+
+        # Also notify the assigned driver directly. The driver app listens on
+        # the discovery socket (group `driver_<user_id>`), NOT the per-ride
+        # `ride_<id>` group, so without this push the driver would never learn
+        # that the rider cancelled an already-accepted ride.
+        if ride.driver_id and ride.driver_id != request.user.user_id:
+            # Send the SAME payload shape as a NEW_RIDE_AVAILABLE push so the
+            # driver app can reuse its existing parsing on data["ride"] (e.g.
+            # to find and remove the matching ride card) WITHOUT any frontend
+            # changes. Lazy import to avoid circular imports.
+            from .dispatch import build_ride_payload
+            ride_data = build_ride_payload(ride, request=request)
+            notify_driver(ride.driver_id, {
+                "event": "RIDE_CANCELLED",
+                "ride": ride_data,
+                "message": f"Ride cancelled by {request.user.full_name}",
+            })
+
         return Response({"message": "Ride cancelled", "fee": ride.cancellation_fee})
 
 
