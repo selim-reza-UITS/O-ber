@@ -39,6 +39,8 @@ class UpdateDriverLocationView(APIView):
             driver_profile.last_location = Point(float(lng), float(lat), srid=4326)
             driver_profile.is_online = True
             driver_profile.save()
+            from src.apps.riders.dispatch import redispatch_stalled_rides
+            redispatch_stalled_rides(request=request)
 
             # 2. WebSocket Push (Hybrid Logic)
             # Find if this driver is currently in an active trip
@@ -108,8 +110,28 @@ class AcceptRideView(APIView):
             if ride.status != 'SEARCHING':
                 return Response({"error": "Ride already taken or cancelled"}, status=400)
             # Only the driver currently holding the offer may accept.
+            # Only the driver currently holding the offer may accept.
             if ride.offered_to_id and ride.offered_to_id != request.user.user_id:
                 return Response({"error": "This ride has moved to another driver."}, status=409)
+
+            # --- Prevent double-booking the SAME driver --------------------------
+            # Lock this driver's profile row so two simultaneous accepts by the
+            # same driver (for two different rides) serialize: the second one
+            # waits here, then sees the active ride below and is rejected. This
+            # is the core fix for "two riders end up with the same driver".
+            DriverProfile.objects.select_for_update().filter(
+                user=request.user
+            ).first()
+
+            already_busy = Ride.objects.filter(
+                driver=request.user,
+                status__in=['ACCEPTED', 'ARRIVED', 'STARTED'],
+            ).exists()
+            if already_busy:
+                return Response(
+                    {"error": "You already have an active ride. Finish it before accepting another."},
+                    status=409,
+                )
             # --- Geofence guard: driver must be within the allowed radius of the pickup ---
             driver_profile = request.user.driver_profile
             if not driver_profile.last_location:
@@ -215,8 +237,18 @@ class DriverDeclineRideView(APIView):
         # Re-offer the ride to the next nearby driver(s). Drivers who already
         # declined (including this one) are excluded inside the dispatcher, so
         # the ride effectively "moves" to another driver.
-        from src.apps.riders.dispatch import offer_ride_to_next_driver
+        from src.apps.riders.dispatch import (
+            offer_ride_to_next_driver,
+            redispatch_stalled_rides,
+        )
         next_driver = offer_ride_to_next_driver(ride, request=request)
+
+        # This driver just freed up by declining. Offer them to any OTHER rider
+        # whose request is still SEARCHING but has no live offer right now — e.g.
+        # a second rider who wanted this same driver and got NO_DRIVERS_AVAILABLE
+        # while the driver was tied up with this (now-declined) offer. The
+        # longest-waiting request wins the freed driver.
+        redispatch_stalled_rides(request=request, exclude_ride_id=ride.id)
 
         return Response(
             {
@@ -343,6 +375,9 @@ class DriverToggleOnlineView(APIView):
             message = "You are now Offline."
 
         profile.save()
+        if profile.is_online:
+            from src.apps.riders.dispatch import redispatch_stalled_rides
+            redispatch_stalled_rides(request=request)
 
         return Response({
             "is_online": profile.is_online,

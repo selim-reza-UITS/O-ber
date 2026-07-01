@@ -45,4 +45,14 @@ def task_expire_ride_offer(ride_id, driver_user_id, offered_at_iso):
         return
 
     RideDecline.objects.get_or_create(ride_id=ride_id, driver_id=driver_user_id)
+    try:
+        from src.apps.drivers.utils import notify_driver
+        from src.apps.riders.dispatch import build_ride_payload
+        notify_driver(driver_user_id, {
+            "event": "RIDE_OFFER_EXPIRED",
+            "ride": build_ride_payload(ride),
+            "message": "This ride offer expired.",
+        })
+    except Exception:
+        pass
     offer_ride_to_next_driver(ride)

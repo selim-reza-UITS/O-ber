@@ -42,32 +42,58 @@ class FareEstimateView(APIView):
 
         RADIUS_KM = 5
 
-        # Find which vehicle types actually have an online driver within 5km.
-        nearby_drivers = DriverProfile.objects.filter(
-            is_active=True,
-            is_online=True,
-            last_location__isnull=False,
-            last_location__distance_lte=(pickup_point, D(km=RADIUS_KM)),
+        # Only drivers who are online, verified, and FREE to take a new ride
+        # (not on an active trip and not already holding an offer) count as
+        # available — mirroring exactly who the dispatcher would actually offer
+        # a ride to. Ordered nearest-first so we can keep just the nearest per
+        # category.
+        from src.apps.riders.dispatch import get_busy_driver_ids
+        busy_ids = get_busy_driver_ids()
+
+        nearby_drivers = (
+            DriverProfile.objects.filter(
+                is_active=True,
+                is_online=True,
+                admin_verified=True,
+                last_location__isnull=False,
+                last_location__distance_lte=(pickup_point, D(km=RADIUS_KM)),
+            )
+            .exclude(user_id__in=busy_ids)
+            .annotate(distance=Distance("last_location", pickup_point))
+            .order_by("distance")
         )
 
-        # Count available drivers per normalized vehicle type.
-        type_counts = {}
+        # Keep ONE ride option per vehicle category: the NEAREST available
+        # driver of that type. If two ECONOMY drivers are nearby, only the
+        # closest one represents the ECONOMY option (the ride is dispatched to
+        # that nearest driver first, and re-offered to the next one only if
+        # they decline — handled by offer_ride_to_next_driver).
+        nearest_by_type = {}
         for driver in nearby_drivers:
             if not driver.vehicle_type:
                 continue
             key = driver.vehicle_type.strip().upper()
-            type_counts[key] = type_counts.get(key, 0) + 1
+            if key in nearest_by_type:
+                continue  # already kept the nearest of this category
+            nearest_by_type[key] = driver
 
         estimates = []
-        for v_type, available_drivers in type_counts.items():
+        for v_type, driver in nearest_by_type.items():
             price = calculate_dynamic_fare(pickup_point, dropoff_point, v_type)
-            eta_minutes = max(1, ceil((distance_km / 40) * 60))
+            eta_minutes = max(1, ceil((distance_km / 40) * 60))  # trip duration
+            # Nearest driver -> pickup (km convention used across the codebase).
+            driver_distance_km = round(
+                driver.last_location.distance(pickup_point) * 111.32, 2
+            )
+            pickup_eta_minutes = max(1, ceil((driver_distance_km / 40) * 60))
             estimates.append({
                 "vehicle_type": v_type,
                 "estimated_price": str(price),
                 "currency": "AWG",
-                "available_drivers": available_drivers,
+                "available_drivers": 1,          # only the nearest is shown/used
                 "eta_minutes": eta_minutes,
+                "driver_distance_km": driver_distance_km,
+                "pickup_eta_minutes": pickup_eta_minutes,
             })
 
         # Optional: sort so cheaper/expected tiers come first
@@ -242,18 +268,18 @@ class CancelRideView(APIView):
             "reason": ride.cancellation_reason
         })
 
-        # Also notify the assigned driver directly. The driver app listens on
-        # the discovery socket (group `driver_<user_id>`), NOT the per-ride
-        # `ride_<id>` group, so without this push the driver would never learn
-        # that the rider cancelled an already-accepted ride.
-        if ride.driver_id and ride.driver_id != request.user.user_id:
-            # Send the SAME payload shape as a NEW_RIDE_AVAILABLE push so the
-            # driver app can reuse its existing parsing on data["ride"] (e.g.
-            # to find and remove the matching ride card) WITHOUT any frontend
-            # changes. Lazy import to avoid circular imports.
+        # Notify whichever driver currently has this ride on their screen so
+        # the card is dismissed. That is either the ASSIGNED driver (ride was
+        # already accepted) OR — critically — the driver holding an OUTSTANDING
+        # OFFER on a still-SEARCHING ride (`offered_to`). Without notifying the
+        # offered driver, cancelling a searching ride leaves a dead ride card on
+        # their app, which then appears to be "replaced" the moment the freed
+        # driver is handed the next waiting ride.
+        driver_to_notify = ride.driver_id or ride.offered_to_id
+        if driver_to_notify and driver_to_notify != request.user.user_id:
             from .dispatch import build_ride_payload
             ride_data = build_ride_payload(ride, request=request)
-            notify_driver(ride.driver_id, {
+            notify_driver(driver_to_notify, {
                 "event": "RIDE_CANCELLED",
                 "ride": ride_data,
                 "message": f"Ride cancelled by {request.user.full_name}",
