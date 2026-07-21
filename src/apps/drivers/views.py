@@ -253,9 +253,9 @@ class DriverDeclineRideView(APIView):
         return Response(
             {
                 "message": (
-                    "Ride declined and offered to the next driver."
+                    "Ryde declined and offered to the next driver."
                     if next_driver else
-                    "Ride declined. No more nearby drivers available."
+                    "Ryde declined. Finding another driver for your ryde."
                 ),
                 "ride_id": ride.id,
                 "offered_to_driver": next_driver.user_id if next_driver else None,

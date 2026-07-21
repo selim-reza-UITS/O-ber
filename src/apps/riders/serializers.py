@@ -2,11 +2,12 @@
 from rest_framework import serializers
 from django.contrib.gis.geos import Point
 from .models import Ride
+
 from src.apps.accounts.models import User, DriverProfile, VehicleImage
 from src.apps.payments.models import Transaction
 from .models import Ride, RideMessage
 from .utils import calculate_dynamic_fare
-
+from django.db.models import Avg
 class SimpleUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -44,9 +45,18 @@ class SimpleDriverProfileSerializer(serializers.ModelSerializer):
     vehicle_images = RideVehicleImageSerializer(
         source='vehicle_photos', many=True, read_only=True
     )
+    rating = serializers.SerializerMethodField()
+    total_trips = serializers.SerializerMethodField()
     class Meta:
         model = DriverProfile
-        fields = ['user', 'user_photo', 'vehicle_brand', 'vehicle_model', 'vehicle_plate', 'vehicle_type', 'last_location', 'vehicle_images']
+        fields = ['user', 'user_photo', 'vehicle_brand', 'vehicle_model', 'vehicle_plate', 'vehicle_type', 'last_location', 'vehicle_images','rating','total_trips']
+
+    def get_rating(self, obj):
+        avg = obj.user.reviews_received.aggregate(Avg('rating'))['rating__avg']
+        return round(avg, 1) if avg else 0.0
+
+    def get_total_trips(self, obj):
+        return obj.user.rides_as_driver.filter(status='COMPLETED').count()
 
 class RideSerializer(serializers.ModelSerializer):
     pickup_lat = serializers.FloatField(write_only=True)

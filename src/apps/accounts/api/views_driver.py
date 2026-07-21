@@ -35,7 +35,13 @@ class DriverOnboardingView(APIView):
         if DriverProfile.objects.filter(user=user, admin_verified=False).exists():
             logger.warning("User already submitted a profile, awaiting review.")
             return self._log_and_response({"error": "Profile already submitted. Please wait for our Admin team to review and activate your account."}, status.HTTP_400_BAD_REQUEST)
-
+        # Vehicle photos are collected as a file list, not a serializer field,
+        # so enforce "at least one required" here with the same message shape.
+        if not request.FILES.getlist('vehicle_images'):
+            return self._log_and_response(
+                {"error": "vehicle_images: This field is must."},
+                status.HTTP_400_BAD_REQUEST,
+            )
         serializer = DriverProfileSerializer(data=request.data)
         
         if serializer.is_valid():

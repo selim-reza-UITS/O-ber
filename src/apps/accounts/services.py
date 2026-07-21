@@ -18,7 +18,7 @@ class OTPService:
     @staticmethod
     def send_otp_email(email, otp):
         send_mail(
-            'Your O-ber Reset Code',
+            'Your Ryde Island Reset Code',
             f'Your OTP is {otp}. It expires in 5 minutes.',
             settings.DEFAULT_FROM_EMAIL,
             [email],

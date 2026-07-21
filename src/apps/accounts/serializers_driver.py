@@ -31,3 +31,28 @@ class DriverProfileSerializer(serializers.ModelSerializer):
             'ai_verified', 'admin_verified', 'is_verified', 'vehicle_photos', 'created_at', 'updated_at'
         ]
         read_only_fields = ['ai_verified', 'admin_verified', 'is_verified', 'created_at', 'updated_at']
+        
+    def __init__(self, *args, **kwargs):
+        """Make EVERY writable onboarding field mandatory with one shared
+        message. This overrides model-level null/blank (e.g. date_of_birth is
+        null/blank on the model but must be provided during onboarding).
+        Read-only fields (id, ai_verified, admin_verified, is_verified,
+        vehicle_photos, created_at, updated_at) are left untouched.
+        """
+        super().__init__(*args, **kwargs)
+        REQUIRED_MSG = "This field is must."
+        for field in self.fields.values():
+            if field.read_only:
+                continue
+            field.required = True
+            field.allow_null = False
+            field.error_messages["required"] = REQUIRED_MSG
+            field.error_messages["null"] = REQUIRED_MSG
+            # Only text-based fields support blank; guard so we don't set an
+            # unsupported attribute on ImageField / DateField / ChoiceField.
+            if isinstance(field, serializers.CharField):
+                field.allow_blank = False
+                field.error_messages["blank"] = REQUIRED_MSG
+            # Choice fields (e.g. gender) reject empty/blank with their own key.
+            if isinstance(field, serializers.ChoiceField):
+                field.error_messages["invalid_choice"] = REQUIRED_MSG
